@@ -17,25 +17,12 @@ from realview_chat.openai_client.responses import OpenAIResponsesClient
 logger = logging.getLogger(__name__)
 
 
-def fetch_images_folder_for_property(property_id: str) -> str:
-    """Fetch or download images for a property.
-
-    TODO: Replace this stub with your implementation that returns a local folder path.
-    """
-
-    raise NotImplementedError(
-        "Implement fetch_images_folder_for_property(property_id) to return a local folder path."
-    )
-
-
 def _chunk_images(items: list[tuple[Path, str]], chunk_size: int) -> Iterable[list[tuple[Path, str]]]:
     for i in range(0, len(items), chunk_size):
         yield items[i : i + chunk_size]
 
 
-def process_property(property_id: str, client: OpenAIResponsesClient) -> dict:
-    folder_path = Path(fetch_images_folder_for_property(property_id))
-    image_paths = list_image_files(folder_path)
+def _process_images(property_id: str, image_paths: list[Path], client: OpenAIResponsesClient) -> dict:
     if not image_paths:
         logger.warning("No images found for property %s", property_id)
 
@@ -83,3 +70,18 @@ def process_property(property_id: str, client: OpenAIResponsesClient) -> dict:
         ],
         "rooms": [asdict(result) for result in pass25_results],
     }
+
+
+def process_property_from_folder(
+    images_dir: Path | str, property_id: str, client: OpenAIResponsesClient
+) -> dict:
+    """Run the pipeline for a property using images from a local folder."""
+
+    folder_path = Path(images_dir)
+    image_paths = list_image_files(folder_path)
+    logger.info("Found %d images in %s", len(image_paths), folder_path)
+    return _process_images(property_id, image_paths, client)
+
+
+# Backwards compatibility alias for any existing callers.
+process_property = process_property_from_folder

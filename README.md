@@ -1,52 +1,30 @@
-# realview_chat
+# RealView Chat (minimal)
 
-A CLI pipeline that reads property IDs, fetches local images, and runs a 3-step OpenAI vision workflow using the Responses API with structured outputs.
+Run a single-pass (Pass 1) OpenAI vision pipeline on a folder of images.
 
-## Setup
+## Prerequisites
+- Python 3.10+
+- Dependencies: `pip install -r requirements.txt` (pins `openai>=1.40,<2`)
+- Environment: set `OPENAI_API_KEY` (e.g., `echo "OPENAI_API_KEY=sk-..." > .env`)
 
-1. **Create a virtual environment (recommended)**
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Set environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your OpenAI API key.
-   ```
-
-## Configure image fetching
-
-Replace the stub in `src/realview_chat/pipeline/property_processor.py`:
-
-```python
-from realview_chat.pipeline.property_processor import fetch_images_folder_for_property
-
-# TODO: implement this function to return a local folder path for images.
-```
-
-## Run the pipeline
-
+## Run
 ```bash
-python scripts/run_pipeline.py --csv data/sample_input.csv --out out/results.jsonl
+python scripts/run_pipeline.py "/Users/vivek/Downloads/case_2203177"
 ```
+
+## What it does
+- Recursively finds `.jpg/.jpeg/.png/.webp` under the folder.
+- Calls OpenAI Responses API (Pass 1 only: room_type, actionable, confidence).
+- Writes JSON to `out/results.json`.
+- Prints a short summary (images found, actionable count, output path).
 
 ## Output format
-
-Results are written as JSON Lines (JSONL) with one JSON object per property. Each record includes:
-- `property_id`
-- `created_at`
-- `images` (pass1 + pass2 per image)
-- `rooms` (pass2.5 consolidation per room)
-
-## Notes
-
-- Images are loaded from local files and sent to the model as base64 data URLs.
-- Pass 2 uses a feature whitelist defined in `src/realview_chat/openai_client/schemas.py`.
-- Pass 2.5 only runs when at least two actionable images are available for a room.
+```json
+{
+  "input_folder": "...",
+  "images_total": 3,
+  "results": [
+    {"file": "img1.jpg", "room_type": "kitchen", "actionable": true, "confidence": 0.82}
+  ]
+}
+```
