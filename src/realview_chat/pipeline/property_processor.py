@@ -33,11 +33,8 @@ def _chunk_images(items: list[tuple[Path, str]], chunk_size: int) -> Iterable[li
         yield items[i : i + chunk_size]
 
 
-def process_property_from_folder(
-    folder_path: Path,
-    property_id: str,
-    client: OpenAIResponsesClient,
-) -> dict:
+def process_property(property_id: str, client: OpenAIResponsesClient) -> dict:
+    folder_path = Path(fetch_images_folder_for_property(property_id))
     image_paths = list_image_files(folder_path)
     if not image_paths:
         logger.warning("No images found for property %s", property_id)
@@ -86,8 +83,3 @@ def process_property_from_folder(
         ],
         "rooms": [asdict(result) for result in pass25_results],
     }
-
-
-def process_property(property_id: str, client: OpenAIResponsesClient) -> dict:
-    folder_path = Path(fetch_images_folder_for_property(property_id))
-    return process_property_from_folder(folder_path, property_id, client)

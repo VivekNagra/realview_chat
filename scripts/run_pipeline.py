@@ -7,18 +7,18 @@ import logging
 from pathlib import Path
 
 from realview_chat.config import load_config
+from realview_chat.io.csv_reader import read_property_ids
 from realview_chat.io.results_writer import write_jsonl
 from realview_chat.openai_client.responses import OpenAIResponsesClient
-from realview_chat.pipeline.property_processor import process_property_from_folder
+from realview_chat.pipeline.property_processor import process_property
 from realview_chat.utils.logging import configure_logging
 from realview_chat.utils.rate_limit import RateLimiter
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the Realview Chat property pipeline.")
-    parser.add_argument("images_dir", type=Path, help="Path to image folder")
-    parser.add_argument("--out", type=Path, default=Path("out/results.jsonl"), help="Path to output JSONL file")
-    parser.add_argument("--property-id", type=str, default="manual_property", help="Optional property id")
+    parser.add_argument("--csv", required=True, type=Path, help="Path to input CSV")
+    parser.add_argument("--out", required=True, type=Path, help="Path to output JSONL file")
     parser.add_argument("--log-file", type=str, default=None, help="Optional log file path")
     return parser.parse_args()
 
@@ -38,18 +38,13 @@ def main() -> None:
         retry_backoff_seconds=config.retry_backoff_seconds,
     )
 
-    logger.info("Processing property %s from %s", args.property_id, args.images_dir)
-    result = process_property_from_folder(args.images_dir, args.property_id, client)
+    results = []
+    for property_id in read_property_ids(args.csv):
+        logger.info("Processing property %s", property_id)
+        results.append(process_property(property_id, client))
 
-    write_jsonl(args.out, [result])
-    logger.info("Wrote 1 result to %s", args.out)
-
-    print("\nRun complete.")
-    print(f"Output file: {args.out.resolve()}")
-    print("Output includes: property_id, created_at, images (pass1+pass2), rooms (pass2.5).")
-    print("Next steps:")
-    print("- Inspect the JSONL output and verify results.")
-    print("- Replace the feature whitelist in src/realview_chat/openai_client/schemas.py if needed.")
+    write_jsonl(args.out, results)
+    logger.info("Wrote %d results to %s", len(results), args.out)
 
 
 if __name__ == "__main__":
