@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from realview_chat.openai_client.responses import OpenAIResponsesClient
+if TYPE_CHECKING:
+    from realview_chat.openai_client.responses import LLMClient
 
 
 @dataclass(frozen=True)
@@ -22,7 +24,7 @@ class Pass25Result:
 
 
 def run_pass25(
-    client: OpenAIResponsesClient,
+    client: LLMClient,
     room_type: str,
     image_data_urls: list[str],
 ) -> Pass25Result:

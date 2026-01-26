@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from realview_chat.openai_client.responses import OpenAIResponsesClient
+if TYPE_CHECKING:
+    from realview_chat.openai_client.responses import LLMClient
 
 
 @dataclass(frozen=True)
@@ -15,7 +17,7 @@ class FeatureResult:
     explanation: str
 
 
-def run_pass2(client: OpenAIResponsesClient, image_data_url: str) -> list[FeatureResult]:
+def run_pass2(client: LLMClient, image_data_url: str) -> list[FeatureResult]:
     result = client.pass2(image_data_url)
     return [
         FeatureResult(
