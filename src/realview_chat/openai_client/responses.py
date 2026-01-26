@@ -61,8 +61,9 @@ class OpenAIBackend:
         )
 
     def pass1(self, image_data_url: str) -> dict[str, Any]:
+        # FIXED: Changed "input_image" to "image_url"
         input_items = [
-            {"role": "user", "content": [{"type": "input_image", "image_url": {"url": image_data_url}}]},
+            {"role": "user", "content": [{"type": "image_url", "image_url": {"url": image_data_url}}]},
         ]
         return self._call(
             system_prompt=prompts.PASS1_SYSTEM,
@@ -73,8 +74,9 @@ class OpenAIBackend:
     def pass2(self, image_data_url: str) -> dict[str, Any]:
         whitelist = ", ".join(schemas.FEATURE_WHITELIST)
         system_prompt = f"{prompts.PASS2_SYSTEM}\nAllowed feature IDs: {whitelist}"
+        # FIXED: Changed "input_image" to "image_url"
         input_items = [
-            {"role": "user", "content": [{"type": "input_image", "image_url": {"url": image_data_url}}]},
+            {"role": "user", "content": [{"type": "image_url", "image_url": {"url": image_data_url}}]},
         ]
         return self._call(
             system_prompt=system_prompt,
@@ -84,8 +86,9 @@ class OpenAIBackend:
 
     def pass25(self, room_type: str, image_data_urls: list[str]) -> dict[str, Any]:
         content = [{"type": "text", "text": f"Room type to consolidate: {room_type}"}]
+        # FIXED: Changed "input_image" to "image_url"
         content.extend(
-            {"type": "input_image", "image_url": {"url": url}} for url in image_data_urls
+            {"type": "image_url", "image_url": {"url": url}} for url in image_data_urls
         )
         input_items = [{"role": "user", "content": content}]
         return self._call(

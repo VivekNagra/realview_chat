@@ -1,0 +1,338 @@
+{
+  "property_id": "case_2203177",
+  "created_at": "2026-01-26T10:15:37.864494+00:00",
+  "images": [
+    {
+      "filename": "b3405798_E.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": false,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "b3405798_N.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": false,
+        "confidence": 1.0
+      },
+      "pass2": []
+    },
+    {
+      "filename": "b3405798_S.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": false,
+        "confidence": 1.0
+      },
+      "pass2": []
+    },
+    {
+      "filename": "b3405798_T.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": false,
+        "confidence": 1.0
+      },
+      "pass2": []
+    },
+    {
+      "filename": "b3405798_W.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": false,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "energyimg_611181.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": true,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870969.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": true,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870970.jpg",
+      "pass1": {
+        "room_type": "bathroom",
+        "actionable": true,
+        "confidence": 0.98
+      },
+      "pass2": [
+        {
+          "feature_id": "broken_fixture",
+          "severity": "low",
+          "confidence": 0.9,
+          "explanation": "The towel holder near the toilet appears to be broken or folded against the wall, indicating it might not be fully functional."
+        }
+      ]
+    },
+    {
+      "filename": "image-73870971.jpg",
+      "pass1": {
+        "room_type": "bedroom",
+        "actionable": true,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870972.jpg",
+      "pass1": {
+        "room_type": "bedroom",
+        "actionable": true,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870973.jpg",
+      "pass1": {
+        "room_type": "unknown",
+        "actionable": false,
+        "confidence": 0.45
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870974.jpg",
+      "pass1": {
+        "room_type": "kitchen",
+        "actionable": false,
+        "confidence": 0.97
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870975.jpg",
+      "pass1": {
+        "room_type": "living_room",
+        "actionable": true,
+        "confidence": 0.85
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870976.jpg",
+      "pass1": {
+        "room_type": "garage",
+        "actionable": false,
+        "confidence": 0.85
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870977.jpg",
+      "pass1": {
+        "room_type": "hallway",
+        "actionable": true,
+        "confidence": 0.9
+      },
+      "pass2": [
+        {
+          "feature_id": "mold",
+          "severity": "medium",
+          "confidence": 0.9,
+          "explanation": "There are visible dark spots consistent with mold growth on the lower portion of the white walls near the coats and entrance door."
+        }
+      ]
+    },
+    {
+      "filename": "image-73870978.jpg",
+      "pass1": {
+        "room_type": "dining_room",
+        "actionable": false,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870979.jpg",
+      "pass1": {
+        "room_type": "living_room",
+        "actionable": false,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870980.jpg",
+      "pass1": {
+        "room_type": "dining_room",
+        "actionable": false,
+        "confidence": 0.85
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870981.jpg",
+      "pass1": {
+        "room_type": "kitchen",
+        "actionable": false,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870982.jpg",
+      "pass1": {
+        "room_type": "kitchen",
+        "actionable": true,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870983.jpg",
+      "pass1": {
+        "room_type": "kitchen",
+        "actionable": false,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870984.jpg",
+      "pass1": {
+        "room_type": "unknown",
+        "actionable": false,
+        "confidence": 0.6
+      },
+      "pass2": [
+        {
+          "feature_id": "stained_carpet",
+          "severity": "low",
+          "confidence": 0.85,
+          "explanation": "The carpet shows some subtle discoloration and variations that might indicate light staining."
+        }
+      ]
+    },
+    {
+      "filename": "image-73870985.jpg",
+      "pass1": {
+        "room_type": "bedroom",
+        "actionable": false,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870986.jpg",
+      "pass1": {
+        "room_type": "bathroom",
+        "actionable": true,
+        "confidence": 0.99
+      },
+      "pass2": [
+        {
+          "feature_id": "water_damage",
+          "severity": "medium",
+          "confidence": 0.9,
+          "explanation": "There are visible signs of water damage on the tiles surrounding the bathtub, particularly near the bottom edge where discoloration and streaking are present."
+        }
+      ]
+    },
+    {
+      "filename": "image-73870987.jpg",
+      "pass1": {
+        "room_type": "living_room",
+        "actionable": false,
+        "confidence": 0.85
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870988.jpg",
+      "pass1": {
+        "room_type": "garage",
+        "actionable": true,
+        "confidence": 0.95
+      },
+      "pass2": [
+        {
+          "feature_id": "water_damage",
+          "severity": "low",
+          "confidence": 0.8,
+          "explanation": "There are some dark stains on the floor that may indicate minor water damage or liquid spills, but they do not appear severe."
+        }
+      ]
+    },
+    {
+      "filename": "image-73870989.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": true,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870990.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": true,
+        "confidence": 0.99
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870991.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": true,
+        "confidence": 0.95
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870992.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": false,
+        "confidence": 1.0
+      },
+      "pass2": []
+    },
+    {
+      "filename": "image-73870993.jpg",
+      "pass1": {
+        "room_type": "exterior",
+        "actionable": true,
+        "confidence": 0.95
+      },
+      "pass2": []
+    }
+  ],
+  "rooms": [
+    {
+      "room_type": "exterior",
+      "confirmed_features": []
+    },
+    {
+      "room_type": "exterior",
+      "confirmed_features": []
+    },
+    {
+      "room_type": "bathroom",
+      "confirmed_features": []
+    },
+    {
+      "room_type": "bedroom",
+      "confirmed_features": []
+    }
+  ]
+}
