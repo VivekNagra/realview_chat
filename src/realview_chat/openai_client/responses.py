@@ -116,12 +116,15 @@ class GeminiBackend:
             raise ValueError(f"Failed to decode data URL: {e}")
 
     def _clean_schema(self, schema: Any) -> Any:
-        """Recursively remove 'additionalProperties' from schema for Gemini compatibility."""
+        """Recursively remove unsupported keys from schema for Gemini compatibility."""
+        # Gemini does not support these JSON schema validation keywords
+        UNSUPPORTED_KEYS = {"additionalProperties", "minimum", "maximum"}
+        
         if isinstance(schema, dict):
             return {
                 k: self._clean_schema(v)
                 for k, v in schema.items()
-                if k != "additionalProperties"
+                if k not in UNSUPPORTED_KEYS
             }
         if isinstance(schema, list):
             return [self._clean_schema(item) for item in schema]
@@ -130,7 +133,7 @@ class GeminiBackend:
     def _call(self, system_prompt: str, schema: dict, parts: list[Any]) -> dict:
         # 1. Extract the inner schema
         raw_schema = schema.get("schema", schema)
-        # 2. Clean it (remove OpenAI-specific keys like additionalProperties)
+        # 2. Clean it (remove OpenAI-specific keys like additionalProperties, minimum, maximum)
         target_schema = self._clean_schema(raw_schema)
         
         def execute():
