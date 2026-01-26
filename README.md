@@ -11,11 +11,17 @@ Run a single-pass (Pass 1) OpenAI vision pipeline on a folder of images.
 ```bash
 python -m venv venv
 .\venv\Scripts\Activate
-
+```
+## Select provider
+```bash
 $env:LLM_PROVIDER="google"
+```
 # or
+```bash
 $env:LLM_PROVIDER="openai"
-
+```
+## Run script
+```bash
 python scripts/run_pipeline.py "/Users/vivek/Downloads/case_2203177"
 ```
 
