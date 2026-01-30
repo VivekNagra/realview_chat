@@ -31,7 +31,7 @@ htmlcov/
 # --- Project Specific ---
 # Ignore all output results
 out/*
-# But keep the folder structure
+
 !out/.gitkeep
 
 # Temporary file to check what models we can use.

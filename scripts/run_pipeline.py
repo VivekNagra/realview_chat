@@ -45,7 +45,7 @@ def main() -> None:
     configure_logging(level=log_level)
     
     # 2. Load Config & Initialize Client
-    # This will check LLM_PROVIDER env var to decide between OpenAI and Google
+    # This checks LLM_PROVIDER field in .env to decide between OpenAI and Google
     try:
         config = load_config()
         client = create_client(config)
