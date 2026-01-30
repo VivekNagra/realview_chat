@@ -7,6 +7,7 @@ function getImageUrl(propertyId, filename) {
   return `${API_BASE}/images/${encodeURIComponent(propertyId)}/${encodeURIComponent(filename)}`
 }
 
+/** Normalize API response to an array of property objects (backend returns a list of properties). */
 function normalizeProperties(data) {
   if (Array.isArray(data)) return data
   if (data && typeof data.property_id !== 'undefined') return [data]

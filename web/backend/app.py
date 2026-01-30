@@ -22,22 +22,22 @@ CORS(app)
 
 @app.route("/api/properties", methods=["GET"])
 def get_properties():
-    """Scan out/ for results_*.json and return all properties as a JSON list."""
+    """Scan OUT_DIR for all files matching results_*.json; load each and return a single list of property objects."""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    results = []
+    properties = []
     for path in sorted(OUT_DIR.glob("results_*.json")):
         try:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
-            results.append(data)
+            properties.append(data)
         except (json.JSONDecodeError, OSError):
             continue
-    return jsonify(results)
+    return jsonify(properties)
 
 
 @app.route("/api/images/<property_id>/<path:filename>", methods=["GET"])
 def serve_image(property_id, filename):
-    """Serve an image from CASES_ROOT/case_<property_id>/<filename>. property_id is numerical (e.g. 2203177)."""
+    """Serve an image from CASES_ROOT/case_<property_id>/<filename>. Compatible with numerical property_id (e.g. 2203177)."""
     base = Path(filename).name
     if base != filename:
         return jsonify({"error": "Invalid filename"}), 400

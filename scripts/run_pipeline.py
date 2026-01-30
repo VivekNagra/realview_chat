@@ -65,12 +65,12 @@ def main() -> None:
     if not images_dir.exists() or not images_dir.is_dir():
         sys.exit(f"Error: image folder not found: {images_dir}")
 
-    # Numerical property_id for output filename and JSON (folder name without "case_" prefix)
-    property_id = images_dir.name.replace("case_", "", 1)
-    out_path = OUT_DIR / f"results_{property_id}.json"
+    # Numerical property_id: strip any "case_" prefix for output filename and JSON
+    property_id = images_dir.name.replace("case_", "")
+    target_out = OUT_DIR / f"results_{property_id}.json"
 
-    if out_path.exists():
-        print(f"Skipping property {property_id}, results already exist.")
+    if target_out.exists():
+        print(f"Results already exist for {property_id}. Skipping...")
         return
 
     # 4. Run Pipeline
@@ -87,13 +87,13 @@ def main() -> None:
 
     # 5. Write Output
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(
+    target_out.write_text(
         json.dumps(result, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
     print("Run complete.")
-    print(f"Output written to: {out_path.resolve()}")
+    print(f"Output written to: {target_out.resolve()}")
 
 
 if __name__ == "__main__":
