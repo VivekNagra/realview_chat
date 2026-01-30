@@ -4,7 +4,7 @@ import './App.css'
 const API_BASE = '/api'
 
 function getImageUrl(propertyId, filename) {
-  return `http://localhost:5000/api/images/${encodeURIComponent(propertyId)}/${encodeURIComponent(filename)}`
+  return `${API_BASE}/images/${encodeURIComponent(propertyId)}/${encodeURIComponent(filename)}`
 }
 
 function normalizeProperties(data) {
@@ -220,9 +220,13 @@ function App() {
 
   useEffect(() => {
     fetch(`${API_BASE}/properties`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch properties')
-        return res.json()
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          const msg = data?.error ?? `Failed to fetch properties (${res.status})`
+          throw new Error(msg)
+        }
+        return data
       })
       .then((data) => {
         setProperties(normalizeProperties(data))

@@ -11,7 +11,6 @@ from flask_cors import CORS
 # Project root (parent of web/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 OUT_DIR = PROJECT_ROOT / "out"
-RESULTS_PATH = OUT_DIR / "results.json"
 FEEDBACK_PATH = OUT_DIR / "feedback.json"
 
 # Centralized cases storage: each property has a folder case_<property_id>
@@ -23,24 +22,27 @@ CORS(app)
 
 @app.route("/api/properties", methods=["GET"])
 def get_properties():
-    """Serve the content of out/results.json."""
-    if not RESULTS_PATH.exists():
-        return jsonify({"error": "results.json not found"}), 404
-    try:
-        with open(RESULTS_PATH, encoding="utf-8") as f:
-            data = json.load(f)
-        return jsonify(data)
-    except (json.JSONDecodeError, OSError) as e:
-        return jsonify({"error": str(e)}), 500
+    """Scan out/ for results_*.json and return all properties as a JSON list."""
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    results = []
+    for path in sorted(OUT_DIR.glob("results_*.json")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            results.append(data)
+        except (json.JSONDecodeError, OSError):
+            continue
+    return jsonify(results)
 
 
 @app.route("/api/images/<property_id>/<path:filename>", methods=["GET"])
 def serve_image(property_id, filename):
-    """Serve an image from CASES_ROOT/case_<property_id>/<filename>."""
+    """Serve an image from CASES_ROOT/case_<property_id>/<filename>. property_id is numerical (e.g. 2203177)."""
     base = Path(filename).name
     if base != filename:
         return jsonify({"error": "Invalid filename"}), 400
-    case_dir = CASES_ROOT / f"case_{property_id}"
+    case_folder = property_id if str(property_id).startswith("case_") else f"case_{property_id}"
+    case_dir = CASES_ROOT / case_folder
     if not case_dir.exists() or not case_dir.is_dir():
         return jsonify({"error": "Property image folder not found"}), 404
     path = case_dir / base

@@ -10,9 +10,11 @@ from pathlib import Path
 
 # Centralized cases storage: each property has a folder case_<property_id>
 CASES_ROOT = Path("/Users/vivek/Desktop/RealView/cases")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+OUT_DIR = PROJECT_ROOT / "out"
 
 # Ensure the src directory is in the python path if running from root
-sys.path.append(str(Path(__file__).parents[1] / "src"))
+sys.path.append(str(PROJECT_ROOT / "src"))
 
 from realview_chat.config import load_config
 from realview_chat.openai_client.responses import create_client
@@ -25,12 +27,6 @@ def parse_args() -> argparse.Namespace:
         "images_dir",
         type=str,
         help='Path to image folder, or property_id to use CASES_ROOT/case_<id>/ (e.g. "/path/to/images" or "2203177" or "case_2203177")',
-    )
-    parser.add_argument(
-        "--out", 
-        type=Path, 
-        default=Path("out/results.json"), 
-        help="Path to output JSON file (default: out/results.json)"
     )
     parser.add_argument(
         "--debug", 
@@ -69,8 +65,13 @@ def main() -> None:
     if not images_dir.exists() or not images_dir.is_dir():
         sys.exit(f"Error: image folder not found: {images_dir}")
 
-    # Use folder name as property_id so web app can load images from case_<property_id>
-    property_id = images_dir.name
+    # Numerical property_id for output filename and JSON (folder name without "case_" prefix)
+    property_id = images_dir.name.replace("case_", "", 1)
+    out_path = OUT_DIR / f"results_{property_id}.json"
+
+    if out_path.exists():
+        print(f"Skipping property {property_id}, results already exist.")
+        return
 
     # 4. Run Pipeline
     try:
@@ -85,14 +86,14 @@ def main() -> None:
         sys.exit(1)
 
     # 5. Write Output
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2), 
-        encoding="utf-8"
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
 
     print("Run complete.")
-    print(f"Output written to: {args.out.resolve()}")
+    print(f"Output written to: {out_path.resolve()}")
 
 
 if __name__ == "__main__":
