@@ -51,6 +51,20 @@ def serve_image(property_id, filename):
     return send_from_directory(str(case_dir), base)
 
 
+@app.route("/api/feedback", methods=["GET"])
+def get_feedback():
+    """Return the entire content of out/feedback.json (list of feedback entries)."""
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    if not FEEDBACK_PATH.exists():
+        return jsonify([])
+    try:
+        with open(FEEDBACK_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return jsonify(data if isinstance(data, list) else [])
+    except (json.JSONDecodeError, OSError):
+        return jsonify([])
+
+
 @app.route("/api/feedback", methods=["POST"])
 def post_feedback():
     """Accept feedback and append to out/feedback.json."""
@@ -87,4 +101,5 @@ def post_feedback():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Use 5001 to avoid conflict with macOS AirPlay Receiver on port 5000 (which returns 403 for API requests)
+    app.run(debug=True, port=5001)

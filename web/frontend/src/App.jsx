@@ -53,25 +53,24 @@ function getImagesForRoom(property, roomType) {
   return images.filter((img) => (img.pass1?.room_type ?? 'unknown') === roomType)
 }
 
+/** Find verdict for a feature in global feedback (same property_id, filename, feature_id). Uses latest match. */
+function getVerdictForFeature(allFeedback, propertyId, filename, featureId) {
+  if (!Array.isArray(allFeedback) || !filename) return null
+  for (let i = allFeedback.length - 1; i >= 0; i--) {
+    const e = allFeedback[i]
+    if (e.property_id === propertyId && e.filename === filename && e.feature_id === featureId) {
+      return e.verdict
+    }
+  }
+  return null
+}
+
 function FeatureCard({ property, room, feature, featureIndex, reviewedVerdict, onFeedback }) {
   const roomImages = getImagesForRoom(property, room.room_type)
   const filename = feature.filename ?? roomImages[0]?.filename ?? ''
 
   const handleVerdict = (verdict) => {
-    fetch(`${API_BASE}/feedback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        property_id: property.property_id,
-        filename,
-        feature_id: feature.feature_id,
-        verdict,
-      }),
-    })
-      .then((res) => {
-        if (res.ok) onFeedback(verdict)
-      })
-      .catch(() => {})
+    onFeedback(verdict)
   }
 
   const isReviewed = !!reviewedVerdict
@@ -126,17 +125,31 @@ function FeatureCard({ property, room, feature, featureIndex, reviewedVerdict, o
   )
 }
 
-function PropertyReviewView({ property }) {
+function PropertyReviewView({ property, allFeedback, onFeedbackSubmit }) {
   const rooms = getRoomsWithFeatures(property)
-  const [reviewedFeedback, setReviewedFeedback] = useState({})
 
-  const feedbackKey = (roomType, featureId, index) => `${roomType}-${featureId}-${index}`
+  const getVerdict = (f, roomType) => {
+    const roomImages = getImagesForRoom(property, roomType)
+    const filename = f.filename ?? roomImages[0]?.filename ?? ''
+    return getVerdictForFeature(allFeedback, property.property_id, filename, f.feature_id)
+  }
 
-  const handleFeedback = (roomType, featureId, index, verdict) => {
-    setReviewedFeedback((prev) => ({
-      ...prev,
-      [feedbackKey(roomType, featureId, index)]: verdict,
-    }))
+  const handleFeedback = (verdict, filename, featureId) => {
+    const entry = {
+      property_id: property.property_id,
+      filename,
+      feature_id: featureId,
+      verdict,
+    }
+    fetch(`${API_BASE}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    })
+      .then((res) => {
+        if (res.ok) onFeedbackSubmit(entry)
+      })
+      .catch(() => {})
   }
 
   return (
@@ -154,17 +167,21 @@ function PropertyReviewView({ property }) {
               </h4>
               {room.confirmed_features?.length > 0 ? (
                 <ul className="space-y-2">
-                  {room.confirmed_features.map((f, i) => (
-                    <FeatureCard
-                      key={`${f.feature_id}-${i}`}
-                      property={property}
-                      room={room}
-                      feature={f}
-                      featureIndex={i}
-                      reviewedVerdict={reviewedFeedback[feedbackKey(room.room_type, f.feature_id, i)]}
-                      onFeedback={(verdict) => handleFeedback(room.room_type, f.feature_id, i, verdict)}
-                    />
-                  ))}
+                  {room.confirmed_features.map((f, i) => {
+                    const roomImages = getImagesForRoom(property, room.room_type)
+                    const filename = f.filename ?? roomImages[0]?.filename ?? ''
+                    return (
+                      <FeatureCard
+                        key={`${f.feature_id}-${i}`}
+                        property={property}
+                        room={room}
+                        feature={f}
+                        featureIndex={i}
+                        reviewedVerdict={getVerdict(f, room.room_type)}
+                        onFeedback={(verdict) => handleFeedback(verdict, filename, f.feature_id)}
+                      />
+                    )
+                  })}
                 </ul>
               ) : (
                 <p className="text-slate-400 text-sm">No confirmed features</p>
@@ -216,8 +233,16 @@ function PropertyReviewView({ property }) {
 function App() {
   const [properties, setProperties] = useState([])
   const [selectedProperty, setSelectedProperty] = useState(null)
+  const [allFeedback, setAllFeedback] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  useEffect(() => {
+    fetch(`${API_BASE}/feedback`)
+      .then((res) => (res.ok ? res.json() : Promise.resolve([])))
+      .then((data) => setAllFeedback(Array.isArray(data) ? data : []))
+      .catch(() => setAllFeedback([]))
+  }, [])
 
   useEffect(() => {
     fetch(`${API_BASE}/properties`)
@@ -311,7 +336,11 @@ function App() {
         </header>
         <div className="flex-1 overflow-auto p-0 min-h-0">
           {selectedProperty && (
-            <PropertyReviewView property={selectedProperty} />
+            <PropertyReviewView
+              property={selectedProperty}
+              allFeedback={allFeedback}
+              onFeedbackSubmit={(entry) => setAllFeedback((prev) => [...prev, entry])}
+            />
           )}
         </div>
       </main>
