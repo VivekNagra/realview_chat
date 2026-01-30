@@ -22,7 +22,7 @@ CORS(app)
 
 @app.route("/api/properties", methods=["GET"])
 def get_properties():
-    """Scan OUT_DIR for all files matching results_*.json; load each and return a single list of property objects."""
+    """Scan OUT_DIR for results_*.json (and legacy results.json); load each and return a list of property objects."""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     properties = []
     for path in sorted(OUT_DIR.glob("results_*.json")):
@@ -32,6 +32,15 @@ def get_properties():
             properties.append(data)
         except (json.JSONDecodeError, OSError):
             continue
+    # Legacy: if no per-property files, try single results.json
+    if not properties and (OUT_DIR / "results.json").exists():
+        try:
+            with open(OUT_DIR / "results.json", encoding="utf-8") as f:
+                data = json.load(f)
+            if data and isinstance(data, dict) and "property_id" in data:
+                properties.append(data)
+        except (json.JSONDecodeError, OSError):
+            pass
     return jsonify(properties)
 
 
