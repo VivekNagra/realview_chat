@@ -3,8 +3,8 @@ import './App.css'
 
 const API_BASE = '/api'
 
-function imageUrl(filename) {
-  return `${API_BASE}/images/${encodeURIComponent(filename)}`
+function getImageUrl(propertyId, filename) {
+  return `http://localhost:5000/api/images/${encodeURIComponent(propertyId)}/${encodeURIComponent(filename)}`
 }
 
 function normalizeProperties(data) {
@@ -190,7 +190,7 @@ function PropertyReviewView({ property }) {
                   {images.map((img) => (
                     <div key={img.filename} className="rounded-lg overflow-hidden bg-white border border-slate-200 shadow-sm">
                       <img
-                        src={imageUrl(img.filename)}
+                        src={getImageUrl(property.property_id, img.filename)}
                         alt={img.filename}
                         className="w-full h-40 object-cover"
                       />

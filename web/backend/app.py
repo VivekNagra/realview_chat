@@ -3,7 +3,6 @@ Flask backend for the property inspection review tool.
 Serves pipeline results, local images, and accepts feedback.
 """
 import json
-import os
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -15,10 +14,8 @@ OUT_DIR = PROJECT_ROOT / "out"
 RESULTS_PATH = OUT_DIR / "results.json"
 FEEDBACK_PATH = OUT_DIR / "feedback.json"
 
-# Images directory: set IMAGES_DIR env var or use default
-IMAGES_DIR = Path(
-    os.environ.get("IMAGES_DIR", "/Users/vivek/Downloads/case_2203177")
-).resolve()
+# Centralized cases storage: each property has a folder case_<property_id>
+CASES_ROOT = Path("/Users/vivek/Desktop/RealView/cases")
 
 app = Flask(__name__)
 CORS(app)
@@ -37,19 +34,19 @@ def get_properties():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/images/<path:filename>", methods=["GET"])
-def serve_image(filename):
-    """Serve an image from the configured images directory."""
-    # Guard against path traversal: ensure path stays under IMAGES_DIR
+@app.route("/api/images/<property_id>/<path:filename>", methods=["GET"])
+def serve_image(property_id, filename):
+    """Serve an image from CASES_ROOT/case_<property_id>/<filename>."""
     base = Path(filename).name
     if base != filename:
         return jsonify({"error": "Invalid filename"}), 400
-    if not IMAGES_DIR.exists():
-        return jsonify({"error": "Images directory not configured or missing"}), 404
-    path = IMAGES_DIR / base
+    case_dir = CASES_ROOT / f"case_{property_id}"
+    if not case_dir.exists() or not case_dir.is_dir():
+        return jsonify({"error": "Property image folder not found"}), 404
+    path = case_dir / base
     if not path.exists() or not path.is_file():
         return jsonify({"error": "Image not found"}), 404
-    return send_from_directory(str(IMAGES_DIR), base)
+    return send_from_directory(str(case_dir), base)
 
 
 @app.route("/api/feedback", methods=["POST"])
