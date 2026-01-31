@@ -108,7 +108,7 @@ python scripts/run_pipeline.py 2203177
 python scripts/run_pipeline.py "/Users/vivek/Desktop/RealView/cases/case_2203177"
 
 # Windows
-python scripts/run_pipeline.py "C:/Users/YourName/RealView/cases/case_2203177"
+python scripts/run_pipeline.py "C:\Users\ermin\OneDrive\Skrivebord\RealView\cases\case_2203177"
 ```
 
 If `out/results_{property_id}.json` already exists, the script skips that property and does not call the API.
