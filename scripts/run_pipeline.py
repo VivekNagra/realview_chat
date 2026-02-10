@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 # Centralized cases storage: each property has a folder case_<property_id>
-CASES_ROOT = Path("/Users/vivek/Desktop/RealView/cases")
+CASES_ROOT = Path("C:/Users/ermin/OneDrive/Skrivebord/RealView/cases") # Lave det om til miljøvariabel senere?
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = PROJECT_ROOT / "out"
 

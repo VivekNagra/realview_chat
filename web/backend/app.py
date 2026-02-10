@@ -14,7 +14,7 @@ OUT_DIR = PROJECT_ROOT / "out"
 FEEDBACK_PATH = OUT_DIR / "feedback.json"
 
 # Centralized cases storage: each property has a folder case_<property_id>
-CASES_ROOT = Path("/Users/vivek/Desktop/RealView/cases")
+CASES_ROOT = Path("C:/Users/ermin/OneDrive/Skrivebord/RealView/cases")
 
 app = Flask(__name__)
 CORS(app)

@@ -20,3 +20,4 @@ def read_property_ids(csv_path: Path, id_column: str = "id") -> Iterable[str]:
             value = (row.get(id_column) or "").strip()
             if value:
                 yield value
+
