@@ -16,36 +16,34 @@ function normalizeProperties(data) {
 
 /** Build list of unique rooms with confirmed_features. Use property.rooms if present (merged by room_type); else derive from images. */
 function getRoomsWithFeatures(property) {
-  if (property.rooms && property.rooms.length > 0) {
-    const byRoom = new Map()
-    for (const room of property.rooms) {
-      const rt = room.room_type ?? 'unknown'
-      if (!byRoom.has(rt)) {
-        byRoom.set(rt, { room_type: rt, confirmed_features: [] })
-      }
-      const existing = byRoom.get(rt)
-      existing.confirmed_features.push(...(room.confirmed_features ?? []))
-    }
-    return Array.from(byRoom.values())
-  }
-  const images = property.images ?? []
   const byRoom = new Map()
-  for (const img of images) {
-    const roomType = img.pass1?.room_type ?? 'unknown'
-    if (!byRoom.has(roomType)) {
-      byRoom.set(roomType, { room_type: roomType, confirmed_features: [] })
+
+  for (const room of property.rooms ?? []) {
+    const rt = room.room_type ?? 'unknown'
+    if (!byRoom.has(rt)) {
+      byRoom.set(rt, { room_type: rt, confirmed_features: [] })
     }
-    const features = (img.pass2 ?? []).map((f) => ({
+    byRoom.get(rt).confirmed_features.push(...(room.confirmed_features ?? []))
+  }
+
+  for (const img of property.images ?? []) {
+    const rt = img.pass1?.room_type ?? 'unknown'
+    if (!byRoom.has(rt)) {
+      byRoom.set(rt, { room_type: rt, confirmed_features: [] })
+    }
+    const features = (img.pass2 ?? []).map(f => ({
       feature_id: f.feature_id,
       severity: f.severity,
       confidence: f.confidence,
       evidence: f.explanation ?? f.evidence ?? '',
       filename: img.filename,
     }))
-    byRoom.get(roomType).confirmed_features.push(...features)
+    byRoom.get(rt).confirmed_features.push(...features)
   }
+
   return Array.from(byRoom.values())
 }
+
 
 /** Get images for a room from property.images by pass1.room_type */
 function getImagesForRoom(property, roomType) {
@@ -198,6 +196,8 @@ function PropertyReviewView({ property, allFeedback, onFeedbackSubmit }) {
         </h3>
         <ul className="space-y-6">
           {rooms.map((room, idx) => {
+            console.log('Room types:', rooms.map(r => r.room_type));
+
             const images = getImagesForRoom(property, room.room_type)
             return (
               <li key={`img-${room.room_type}-${idx}`} className="border-b border-slate-200 pb-4 last:border-0">
