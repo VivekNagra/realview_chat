@@ -13,8 +13,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 OUT_DIR = PROJECT_ROOT / "out"
 FEEDBACK_PATH = OUT_DIR / "feedback.json"
 
-# Centralized cases storage: each property has a folder case_<property_id>
-CASES_ROOT = Path("/Users/vivek/Desktop/RealView/cases")
+# Centralized cases storage: each property has a folder case_<property_id> (inside app root so path works for any install location)
+CASES_ROOT = PROJECT_ROOT / "cases"
 
 app = Flask(__name__)
 CORS(app)

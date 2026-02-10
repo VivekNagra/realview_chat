@@ -8,9 +8,10 @@ import logging
 import sys
 from pathlib import Path
 
-# Centralized cases storage: each property has a folder case_<property_id>
-CASES_ROOT = Path("/Users/vivek/Desktop/RealView/cases")
+# Project root (realview_chat); cases live inside it so path works for any install location
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# Centralized cases storage: each property has a folder case_<property_id>
+CASES_ROOT = PROJECT_ROOT / "cases"
 OUT_DIR = PROJECT_ROOT / "out"
 
 # Ensure the src directory is in the python path if running from root

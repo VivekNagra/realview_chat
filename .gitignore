@@ -36,3 +36,6 @@ out/*
 
 # Temporary file to check what models we can use.
 check_models.py
+
+## ignore pictures /cases
+cases/*
