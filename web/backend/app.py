@@ -3,6 +3,7 @@ Flask backend for the property inspection review tool.
 Serves pipeline results, local images, and accepts feedback.
 """
 import json
+import shutil
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -12,6 +13,7 @@ from flask_cors import CORS
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 OUT_DIR = PROJECT_ROOT / "out"
 FEEDBACK_PATH = OUT_DIR / "feedback.json"
+GROUND_TRUTH_DIR = OUT_DIR / "ground_truth"
 
 # Centralized cases storage: each property has a folder case_<property_id> (inside app root so path works for any install location)
 CASES_ROOT = PROJECT_ROOT / "cases"
@@ -76,20 +78,42 @@ def get_feedback():
 
 @app.route("/api/feedback", methods=["POST"])
 def post_feedback():
-    """Accept feedback and append to out/feedback.json."""
+    """Accept feedback and append to out/feedback.json.
+
+    Supports two kinds of feedback:
+      1. Feature-level verdict: requires property_id, filename, feature_id, verdict
+      2. Image-level classification: requires property_id, filename, classification
+         where classification is one of: correct, fp, fn
+    """
     body = request.get_json(silent=True)
     if not body:
         return jsonify({"error": "JSON body required"}), 400
-    required = ("property_id", "filename", "feature_id", "verdict")
-    missing = [k for k in required if k not in body]
-    if missing:
-        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    # Always required
+    for field in ("property_id", "filename"):
+        if field not in body:
+            return jsonify({"error": f"Missing required field: {field}"}), 400
+
     entry = {
         "property_id": body["property_id"],
         "filename": body["filename"],
-        "feature_id": body["feature_id"],
-        "verdict": body["verdict"],
     }
+
+    has_verdict = "feature_id" in body and "verdict" in body
+    has_classification = "classification" in body
+
+    if not has_verdict and not has_classification:
+        return jsonify({"error": "Must provide (feature_id + verdict) or classification"}), 400
+
+    if has_verdict:
+        entry["feature_id"] = body["feature_id"]
+        entry["verdict"] = body["verdict"]
+
+    if has_classification:
+        valid_classifications = ("correct", "fp", "fn")
+        if body["classification"] not in valid_classifications:
+            return jsonify({"error": f"classification must be one of: {', '.join(valid_classifications)}"}), 400
+        entry["classification"] = body["classification"]
     # Load existing feedback, append, write
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if FEEDBACK_PATH.exists():
@@ -106,7 +130,36 @@ def post_feedback():
             json.dump(feedback, f, indent=2)
     except OSError as e:
         return jsonify({"error": str(e)}), 500
+
+    # Ground Truth: copy "correct" images into out/ground_truth/
+    if entry.get("classification") == "correct":
+        _copy_to_ground_truth(entry["property_id"], entry["filename"])
+
     return jsonify({"ok": True, "entry": entry}), 201
+
+
+def _copy_to_ground_truth(property_id: str, filename: str) -> None:
+    """Copy an approved image into out/ground_truth/{property_id}_{filename}.
+
+    Uses shutil.copy2 to preserve metadata. Silently skips if the source
+    image cannot be found so the feedback request still succeeds.
+    """
+    # Resolve source path (same logic as serve_image)
+    base = Path(filename).name
+    case_folder = property_id if str(property_id).startswith("case_") else f"case_{property_id}"
+    src = CASES_ROOT / case_folder / base
+
+    if not src.exists() or not src.is_file():
+        app.logger.warning("Ground truth copy skipped – source not found: %s", src)
+        return
+
+    GROUND_TRUTH_DIR.mkdir(parents=True, exist_ok=True)
+    dest = GROUND_TRUTH_DIR / f"{property_id}_{base}"
+    try:
+        shutil.copy2(src, dest)
+        app.logger.info("Copied to ground truth: %s -> %s", src, dest)
+    except OSError as exc:
+        app.logger.error("Failed to copy to ground truth: %s", exc)
 
 
 if __name__ == "__main__":

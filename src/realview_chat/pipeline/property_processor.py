@@ -63,17 +63,34 @@ def _process_images(property_id: str, image_paths: list[Path], client: LLMClient
             # run_pass25 internally calls client.pass25()
             pass25_results.append(run_pass25(client, room_type, image_data_urls)) # type: ignore
 
+    all_image_entries = [
+        {
+            "filename": filename,
+            "pass1": asdict(pass1_results[filename]),
+            "pass2": [asdict(feature) for feature in pass2_results[filename]],
+        }
+        for filename in pass1_results
+    ]
+
+    # Split images into target (actionable kitchens/bathrooms) and review (everything else)
+    target_rooms = {"kitchen", "bathroom"}
+    target_images = [
+        img for img in all_image_entries
+        if img["pass1"].get("room_type") in target_rooms
+        and img["pass1"].get("actionable") is True
+    ]
+    target_filenames = {img["filename"] for img in target_images}
+    review_images = [
+        img for img in all_image_entries
+        if img["filename"] not in target_filenames
+    ]
+
     return {
         "property_id": property_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "images": [
-            {
-                "filename": filename,
-                "pass1": asdict(pass1_results[filename]),
-                "pass2": [asdict(feature) for feature in pass2_results[filename]],
-            }
-            for filename in pass1_results
-        ],
+        "images": all_image_entries,
+        "target_images": [img["filename"] for img in target_images],
+        "review_images": [img["filename"] for img in review_images],
         "rooms": [asdict(result) for result in pass25_results],
     }
 
