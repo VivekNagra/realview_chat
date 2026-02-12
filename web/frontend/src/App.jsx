@@ -128,8 +128,9 @@ function FeatureBadge({ feature }) {
 // ImageCard
 // ---------------------------------------------------------------------------
 
-function ImageCard({ property, image, classification, allFeedback, onClassify, onFeatureFeedback }) {
+function ImageCard({ property, image, classification, allFeedback, onClassify, onFeatureFeedback, readOnly = false }) {
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [lightbox, setLightbox] = useState(false)
   const pass1 = image.pass1 ?? {}
   const features = image.pass2 ?? []
 
@@ -150,8 +151,8 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
 
   return (
     <div className={`rounded-xl border shadow-sm overflow-hidden bg-white transition-all ${cardBorder}`}>
-      {/* Image */}
-      <div className="relative">
+      {/* Image — clickable to enlarge */}
+      <div className="relative cursor-pointer" onClick={() => setLightbox(true)}>
         <img
           src={getImageUrl(property.property_id, image.filename)}
           alt={image.filename}
@@ -166,7 +167,31 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2">
           <p className="text-white text-xs font-medium truncate">{image.filename}</p>
         </div>
+        {/* Zoom hint */}
+        <div className="absolute top-2 left-2 bg-black/40 text-white/80 rounded-md px-1.5 py-0.5 text-xs opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+          Click to enlarge
+        </div>
       </div>
+
+      {/* Lightbox overlay */}
+      {lightbox && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-6" onClick={() => setLightbox(false)}>
+          <button
+            type="button"
+            onClick={() => setLightbox(false)}
+            className="absolute top-4 right-4 text-white/70 hover:text-white text-3xl leading-none z-10"
+          >
+            &times;
+          </button>
+          <img
+            src={getImageUrl(property.property_id, image.filename)}
+            alt={image.filename}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-sm">{image.filename}</p>
+        </div>
+      )}
 
       {/* Metadata */}
       <div className="p-3 space-y-2.5">
@@ -221,7 +246,7 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
                       {(f.explanation || f.evidence) && (
                         <p className="text-slate-500 mt-1">{f.explanation ?? f.evidence}</p>
                       )}
-                      {verdict ? (
+                      {verdict && (
                         <span
                           className={`mt-1 inline-block text-xs font-medium ${
                             verdict === 'agree' ? 'text-emerald-600' : 'text-amber-600'
@@ -229,7 +254,8 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
                         >
                           {verdict === 'agree' ? '\u2713 Agreed' : '\u2717 Disagreed'}
                         </span>
-                      ) : (
+                      )}
+                      {!readOnly && !verdict && (
                         <div className="flex gap-1.5 mt-1.5">
                           <button
                             type="button"
@@ -257,27 +283,29 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
           <p className="text-xs text-slate-400 italic">No features detected</p>
         )}
 
-        {/* Classification buttons */}
-        <div className="flex gap-2 pt-2 border-t border-slate-100">
-          {(['correct', 'fp', 'fn']).map((cls) => {
-            const m = CLASSIFICATION_META[cls]
-            const active = classification === cls
-            return (
-              <button
-                key={cls}
-                type="button"
-                onClick={() => onClassify(image.filename, cls)}
-                className={`flex-1 px-2 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                  active
-                    ? `${m.activeBg} ${m.activeText} ring-2 ${m.ring}`
-                    : `${m.bg} ${m.text} hover:opacity-80`
-                }`}
-              >
-                {m.shortLabel}
-              </button>
-            )
-          })}
-        </div>
+        {/* Classification buttons — hidden in readOnly mode */}
+        {!readOnly && (
+          <div className="flex gap-2 pt-2 border-t border-slate-100">
+            {(['correct', 'fp', 'fn']).map((cls) => {
+              const m = CLASSIFICATION_META[cls]
+              const active = classification === cls
+              return (
+                <button
+                  key={cls}
+                  type="button"
+                  onClick={() => onClassify(image.filename, cls)}
+                  className={`flex-1 px-2 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                    active
+                      ? `${m.activeBg} ${m.activeText} ring-2 ${m.ring}`
+                      : `${m.bg} ${m.text} hover:opacity-80`
+                  }`}
+                >
+                  {m.shortLabel}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -309,7 +337,7 @@ function ReferencePanel({ onClose }) {
 // Ground Truth Master Gallery
 // ---------------------------------------------------------------------------
 
-function GroundTruthGallery({ properties, allFeedback, onFeedbackSubmit }) {
+function GroundTruthGallery({ properties, allFeedback, onNavigateToProperty }) {
   /** Collect every image across all properties that is classified as "correct". */
   const approvedImages = useMemo(() => {
     const results = []
@@ -323,28 +351,6 @@ function GroundTruthGallery({ properties, allFeedback, onFeedbackSubmit }) {
     }
     return results
   }, [properties, allFeedback])
-
-  const handleClassify = useCallback((propertyId, filename, classification) => {
-    const entry = { property_id: propertyId, filename, classification }
-    fetch(`${API_BASE}/feedback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry),
-    })
-      .then((res) => { if (res.ok) onFeedbackSubmit(entry) })
-      .catch(() => {})
-  }, [onFeedbackSubmit])
-
-  const handleFeatureFeedback = useCallback((propertyId, filename, featureId, verdict) => {
-    const entry = { property_id: propertyId, filename, feature_id: featureId, verdict }
-    fetch(`${API_BASE}/feedback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry),
-    })
-      .then((res) => { if (res.ok) onFeedbackSubmit(entry) })
-      .catch(() => {})
-  }, [onFeedbackSubmit])
 
   return (
     <div className="flex flex-col h-full">
@@ -374,18 +380,25 @@ function GroundTruthGallery({ properties, allFeedback, onFeedbackSubmit }) {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {approvedImages.map(({ property, image }) => (
-              <div key={`${property.property_id}-${image.filename}`} className="space-y-0">
-                {/* Property label above card */}
+              <div key={`${property.property_id}-${image.filename}`}>
+                {/* Clickable property link */}
                 <div className="px-1 pb-1">
-                  <span className="text-xs font-medium text-slate-400">Property: {property.property_id}</span>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToProperty(property)}
+                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline transition-colors"
+                  >
+                    Property: {property.property_id} &rarr;
+                  </button>
                 </div>
                 <ImageCard
+                  readOnly
                   property={property}
                   image={image}
                   classification={getClassificationForImage(allFeedback, property.property_id, image.filename)}
                   allFeedback={allFeedback}
-                  onClassify={(filename, cls) => handleClassify(property.property_id, filename, cls)}
-                  onFeatureFeedback={(filename, featureId, verdict) => handleFeatureFeedback(property.property_id, filename, featureId, verdict)}
+                  onClassify={() => {}}
+                  onFeatureFeedback={() => {}}
                 />
               </div>
             ))}
@@ -699,8 +712,8 @@ function App() {
                 : 'text-slate-600 hover:bg-slate-50'
             }`}
           >
-            <span className="w-5 h-5 rounded bg-emerald-500 text-white text-xs flex items-center justify-center font-bold">\u2713</span>
-            Master Gallery
+            
+            GT Gallery
           </button>
         </div>
 
@@ -742,7 +755,7 @@ function App() {
           <GroundTruthGallery
             properties={properties}
             allFeedback={allFeedback}
-            onFeedbackSubmit={(entry) => setAllFeedback((prev) => [...prev, entry])}
+            onNavigateToProperty={selectProperty}
           />
         ) : (
           <>
