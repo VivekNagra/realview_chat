@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import './App.css'
 
 const API_BASE = '/api'
 const TARGET_ROOM_TYPES = ['kitchen', 'bathroom']
 
-const CATEGORY_B_KITCHEN_REF = `Category B Kitchen – Significant Deficiency
+const CATEGORY_B_KITCHEN_REF = `Category B Kitchen \u2013 Significant Deficiency
 
 A kitchen classified as Category B exhibits notable wear or damage that goes beyond normal age-related deterioration. Key indicators include:
 
@@ -32,13 +32,10 @@ function normalizeProperties(data) {
   return []
 }
 
-/** Split property images into target (actionable kitchen/bathroom) and review (everything else).
- *  Uses the pipeline-provided lists when available; falls back to computing from images.
- */
+/** Split property images into target (actionable kitchen/bathroom) and review (everything else). */
 function splitImages(property) {
   const images = property.images ?? []
 
-  // Pipeline may provide filename lists
   if (Array.isArray(property.target_images) && Array.isArray(property.review_images)) {
     const targetSet = new Set(
       property.target_images.map((t) => (typeof t === 'string' ? t : t.filename)),
@@ -49,7 +46,6 @@ function splitImages(property) {
     }
   }
 
-  // Fallback: derive from pass1 data
   const target = images.filter(
     (img) =>
       TARGET_ROOM_TYPES.includes(img.pass1?.room_type) && img.pass1?.actionable === true,
@@ -64,11 +60,7 @@ function getClassificationForImage(allFeedback, propertyId, filename) {
   if (!Array.isArray(allFeedback)) return null
   for (let i = allFeedback.length - 1; i >= 0; i--) {
     const e = allFeedback[i]
-    if (
-      e.property_id === propertyId &&
-      e.filename === filename &&
-      e.classification
-    ) {
+    if (e.property_id === propertyId && e.filename === filename && e.classification) {
       return e.classification
     }
   }
@@ -80,15 +72,18 @@ function getVerdictForFeature(allFeedback, propertyId, filename, featureId) {
   if (!Array.isArray(allFeedback) || !filename) return null
   for (let i = allFeedback.length - 1; i >= 0; i--) {
     const e = allFeedback[i]
-    if (
-      e.property_id === propertyId &&
-      e.filename === filename &&
-      e.feature_id === featureId
-    ) {
+    if (e.property_id === propertyId && e.filename === filename && e.feature_id === featureId) {
       return e.verdict
     }
   }
   return null
+}
+
+/** Derive a property_id from a ground-truth filename like "2203177_kitchen1.jpg". */
+function parseGroundTruthFilename(filename) {
+  const idx = filename.indexOf('_')
+  if (idx === -1) return { propertyId: null, originalName: filename }
+  return { propertyId: filename.slice(0, idx), originalName: filename.slice(idx + 1) }
 }
 
 // ---------------------------------------------------------------------------
@@ -96,9 +91,9 @@ function getVerdictForFeature(allFeedback, propertyId, filename, featureId) {
 // ---------------------------------------------------------------------------
 
 const CLASSIFICATION_META = {
-  correct: { label: 'Correct', bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200', activeBg: 'bg-emerald-600', activeText: 'text-white', ring: 'ring-emerald-300' },
-  fp:      { label: 'False Positive', bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-200', activeBg: 'bg-red-600', activeText: 'text-white', ring: 'ring-red-300' },
-  fn:      { label: 'False Negative', bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200', activeBg: 'bg-amber-600', activeText: 'text-white', ring: 'ring-amber-300' },
+  correct: { label: 'Correct', shortLabel: '\u2713 Correct', bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200', activeBg: 'bg-emerald-600', activeText: 'text-white', ring: 'ring-emerald-300' },
+  fp:      { label: 'False Positive', shortLabel: 'FP', bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-200', activeBg: 'bg-red-600', activeText: 'text-white', ring: 'ring-red-300' },
+  fn:      { label: 'False Negative', shortLabel: 'FN', bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200', activeBg: 'bg-amber-600', activeText: 'text-white', ring: 'ring-amber-300' },
 }
 
 function ClassificationBadge({ classification }) {
@@ -111,12 +106,30 @@ function ClassificationBadge({ classification }) {
   )
 }
 
+/** Compact feature badge showing feature_id + confidence. */
+function FeatureBadge({ feature }) {
+  const conf = feature.confidence ?? 0
+  const pct = (conf * 100).toFixed(0)
+  const color =
+    conf >= 0.7
+      ? 'bg-red-50 text-red-700 border-red-200'
+      : conf >= 0.4
+        ? 'bg-amber-50 text-amber-700 border-amber-200'
+        : 'bg-slate-50 text-slate-600 border-slate-200'
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${color}`}>
+      {(feature.feature_id ?? '').replace(/_/g, ' ')}
+      <span className="opacity-60">{pct}%</span>
+    </span>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // ImageCard
 // ---------------------------------------------------------------------------
 
 function ImageCard({ property, image, classification, allFeedback, onClassify, onFeatureFeedback }) {
-  const [expanded, setExpanded] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const pass1 = image.pass1 ?? {}
   const features = image.pass2 ?? []
 
@@ -156,7 +169,7 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
       </div>
 
       {/* Metadata */}
-      <div className="p-3 space-y-3">
+      <div className="p-3 space-y-2.5">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-indigo-50 text-indigo-700 capitalize">
             {(pass1.room_type ?? 'unknown').replace(/_/g, ' ')}
@@ -173,18 +186,25 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
           </span>
         </div>
 
-        {/* Expandable features */}
-        {features.length > 0 && (
-          <div>
+        {/* AI findings — always visible as badges */}
+        {features.length > 0 ? (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {features.map((f, i) => (
+                <FeatureBadge key={`${f.feature_id}-${i}`} feature={f} />
+              ))}
+            </div>
+
+            {/* Expandable detail panel */}
             <button
               type="button"
-              onClick={() => setExpanded(!expanded)}
+              onClick={() => setDetailsOpen(!detailsOpen)}
               className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
             >
-              {expanded ? '\u25BE' : '\u25B8'} {features.length} feature{features.length !== 1 ? 's' : ''} detected
+              {detailsOpen ? '\u25BE Hide details' : '\u25B8 Show details'}
             </button>
-            {expanded && (
-              <ul className="mt-2 space-y-1.5">
+            {detailsOpen && (
+              <ul className="space-y-1.5">
                 {features.map((f, i) => {
                   const verdict = getVerdictForFeature(
                     allFeedback,
@@ -193,9 +213,9 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
                     f.feature_id,
                   )
                   return (
-                    <li key={`${f.feature_id}-${i}`} className="text-xs border border-slate-100 rounded-md p-2 bg-slate-50/50">
+                    <li key={`detail-${f.feature_id}-${i}`} className="text-xs border border-slate-100 rounded-md p-2 bg-slate-50/50">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-slate-700">{f.feature_id}</span>
+                        <span className="font-medium text-slate-700">{(f.feature_id ?? '').replace(/_/g, ' ')}</span>
                         <span className="text-slate-400 capitalize">{f.severity}</span>
                       </div>
                       {(f.explanation || f.evidence) && (
@@ -233,9 +253,11 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
               </ul>
             )}
           </div>
+        ) : (
+          <p className="text-xs text-slate-400 italic">No features detected</p>
         )}
 
-        {/* Classification buttons — always visible, active one highlighted */}
+        {/* Classification buttons */}
         <div className="flex gap-2 pt-2 border-t border-slate-100">
           {(['correct', 'fp', 'fn']).map((cls) => {
             const m = CLASSIFICATION_META[cls]
@@ -251,7 +273,7 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
                     : `${m.bg} ${m.text} hover:opacity-80`
                 }`}
               >
-                {cls === 'correct' ? '\u2713 Correct' : cls === 'fp' ? 'FP' : 'FN'}
+                {m.shortLabel}
               </button>
             )
           })}
@@ -267,26 +289,12 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
 
 function ReferencePanel({ onClose }) {
   return (
-    <div
-      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-slate-800">
-              Reference: Category B Kitchen
-            </h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-slate-400 hover:text-slate-600 text-xl leading-none"
-            >
-              &times;
-            </button>
+            <h3 className="text-lg font-semibold text-slate-800">Reference: Category B Kitchen</h3>
+            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
           </div>
           <div className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
             {CATEGORY_B_KITCHEN_REF}
@@ -298,8 +306,106 @@ function ReferencePanel({ onClose }) {
 }
 
 // ---------------------------------------------------------------------------
+// Ground Truth Master Gallery
+// ---------------------------------------------------------------------------
+
+function GroundTruthGallery({ properties, allFeedback, onFeedbackSubmit }) {
+  /** Collect every image across all properties that is classified as "correct". */
+  const approvedImages = useMemo(() => {
+    const results = []
+    for (const prop of properties) {
+      for (const img of prop.images ?? []) {
+        const cls = getClassificationForImage(allFeedback, prop.property_id, img.filename)
+        if (cls === 'correct') {
+          results.push({ property: prop, image: img })
+        }
+      }
+    }
+    return results
+  }, [properties, allFeedback])
+
+  const handleClassify = useCallback((propertyId, filename, classification) => {
+    const entry = { property_id: propertyId, filename, classification }
+    fetch(`${API_BASE}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    })
+      .then((res) => { if (res.ok) onFeedbackSubmit(entry) })
+      .catch(() => {})
+  }, [onFeedbackSubmit])
+
+  const handleFeatureFeedback = useCallback((propertyId, filename, featureId, verdict) => {
+    const entry = { property_id: propertyId, filename, feature_id: featureId, verdict }
+    fetch(`${API_BASE}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    })
+      .then((res) => { if (res.ok) onFeedbackSubmit(entry) })
+      .catch(() => {})
+  }, [onFeedbackSubmit])
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">Master Ground Truth Gallery</h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {approvedImages.length} approved image{approvedImages.length !== 1 ? 's' : ''} across all properties
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            Ground Truth
+          </span>
+        </div>
+      </div>
+
+      {/* Gallery */}
+      <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+        {approvedImages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+            <p className="text-sm">No approved images yet.</p>
+            <p className="text-xs mt-1">Classify images as &ldquo;Correct&rdquo; to populate this gallery.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {approvedImages.map(({ property, image }) => (
+              <div key={`${property.property_id}-${image.filename}`} className="space-y-0">
+                {/* Property label above card */}
+                <div className="px-1 pb-1">
+                  <span className="text-xs font-medium text-slate-400">Property: {property.property_id}</span>
+                </div>
+                <ImageCard
+                  property={property}
+                  image={image}
+                  classification={getClassificationForImage(allFeedback, property.property_id, image.filename)}
+                  allFeedback={allFeedback}
+                  onClassify={(filename, cls) => handleClassify(property.property_id, filename, cls)}
+                  onFeatureFeedback={(filename, featureId, verdict) => handleFeatureFeedback(property.property_id, filename, featureId, verdict)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // PropertyReviewView
 // ---------------------------------------------------------------------------
+
+const CLASSIFICATION_TABS = [
+  { id: 'all_results', label: 'All Results', icon: null },
+  { id: 'correct', label: 'Ground Truth', icon: '\u2713' },
+  { id: 'fp', label: 'False Positives', icon: null },
+  { id: 'fn', label: 'False Negatives', icon: null },
+]
 
 const FILTER_OPTIONS = [
   { id: 'all', label: 'All' },
@@ -309,15 +415,28 @@ const FILTER_OPTIONS = [
 ]
 
 function PropertyReviewView({ property, allFeedback, onFeedbackSubmit }) {
-  const [activeTab, setActiveTab] = useState('target')
+  const [classTab, setClassTab] = useState('all_results')
+  const [roomTab, setRoomTab] = useState('target')
   const [filter, setFilter] = useState('all')
   const [showReference, setShowReference] = useState(false)
 
   const { target, review } = useMemo(() => splitImages(property), [property])
-  const currentImages = activeTab === 'target' ? target : review
+  const allImages = useMemo(() => [...target, ...review], [target, review])
+
+  // When a classification tab is active, we show from ALL images; otherwise room tab applies.
+  const baseImages = useMemo(() => {
+    if (classTab !== 'all_results') return allImages
+    return roomTab === 'target' ? target : review
+  }, [classTab, roomTab, target, review, allImages])
 
   const filteredImages = useMemo(() => {
-    return currentImages.filter((img) => {
+    return baseImages.filter((img) => {
+      // Classification tab filter
+      if (classTab !== 'all_results') {
+        const cls = getClassificationForImage(allFeedback, property.property_id, img.filename)
+        if (cls !== classTab) return false
+      }
+      // Secondary filters
       if (filter === 'unreviewed') {
         return !getClassificationForImage(allFeedback, property.property_id, img.filename)
       }
@@ -329,79 +448,115 @@ function PropertyReviewView({ property, allFeedback, onFeedbackSubmit }) {
       }
       return true
     })
-  }, [currentImages, filter, allFeedback, property])
+  }, [baseImages, classTab, filter, allFeedback, property])
 
   // Stats
-  const allImages = useMemo(() => [...target, ...review], [target, review])
   const classifiedCount = useMemo(() => {
     return allImages.filter((img) =>
       getClassificationForImage(allFeedback, property.property_id, img.filename),
     ).length
   }, [allImages, allFeedback, property])
 
-  const handleClassify = (filename, classification) => {
+  const handleClassify = useCallback((filename, classification) => {
     const entry = { property_id: property.property_id, filename, classification }
     fetch(`${API_BASE}/feedback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(entry),
     })
-      .then((res) => {
-        if (res.ok) onFeedbackSubmit(entry)
-      })
+      .then((res) => { if (res.ok) onFeedbackSubmit(entry) })
       .catch(() => {})
-  }
+  }, [property.property_id, onFeedbackSubmit])
 
-  const handleFeatureFeedback = (filename, featureId, verdict) => {
-    const entry = {
-      property_id: property.property_id,
-      filename,
-      feature_id: featureId,
-      verdict,
-    }
+  const handleFeatureFeedback = useCallback((filename, featureId, verdict) => {
+    const entry = { property_id: property.property_id, filename, feature_id: featureId, verdict }
     fetch(`${API_BASE}/feedback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(entry),
     })
-      .then((res) => {
-        if (res.ok) onFeedbackSubmit(entry)
-      })
+      .then((res) => { if (res.ok) onFeedbackSubmit(entry) })
       .catch(() => {})
-  }
+  }, [property.property_id, onFeedbackSubmit])
 
   return (
     <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-3">
+      {/* Classification tabs row */}
+      <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-2">
+        <div className="flex items-center gap-1">
+          {CLASSIFICATION_TABS.map((tab) => {
+            const active = classTab === tab.id
+            // Count for each classification tab
+            let count = null
+            if (tab.id !== 'all_results') {
+              count = allImages.filter(
+                (img) => getClassificationForImage(allFeedback, property.property_id, img.filename) === tab.id,
+              ).length
+            }
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => { setClassTab(tab.id); setFilter('all') }}
+                className={`px-3.5 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                  active
+                    ? tab.id === 'correct'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : tab.id === 'fp'
+                        ? 'bg-red-100 text-red-800'
+                        : tab.id === 'fn'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-indigo-100 text-indigo-800'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {tab.icon && <span className="mr-1">{tab.icon}</span>}
+                {tab.label}
+                {count !== null && (
+                  <span className="ml-1.5 text-xs opacity-60">({count})</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Toolbar: room tabs + filters + stats */}
+      <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-2.5">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          {/* Tabs */}
-          <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
-            <button
-              type="button"
-              onClick={() => { setActiveTab('target'); setFilter('all') }}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'target'
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-800'
-              }`}
-            >
-              Target Rooms
-              <span className="ml-1.5 text-xs font-normal text-slate-400">({target.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setActiveTab('review'); setFilter('all') }}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'review'
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-800'
-              }`}
-            >
-              Verification Bin
-              <span className="ml-1.5 text-xs font-normal text-slate-400">({review.length})</span>
-            </button>
-          </div>
+          {/* Room tabs — only shown when classTab is "all_results" */}
+          {classTab === 'all_results' ? (
+            <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => { setRoomTab('target'); setFilter('all') }}
+                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  roomTab === 'target'
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                Target Rooms
+                <span className="ml-1.5 text-xs font-normal text-slate-400">({target.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setRoomTab('review'); setFilter('all') }}
+                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  roomTab === 'review'
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                Verification Bin
+                <span className="ml-1.5 text-xs font-normal text-slate-400">({review.length})</span>
+              </button>
+            </div>
+          ) : (
+            <div className="text-sm text-slate-500 font-medium">
+              Showing {filteredImages.length} image{filteredImages.length !== 1 ? 's' : ''}
+            </div>
+          )}
 
           {/* Filters */}
           <div className="flex items-center gap-1.5">
@@ -441,7 +596,7 @@ function PropertyReviewView({ property, allFeedback, onFeedbackSubmit }) {
       <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
         {filteredImages.length === 0 ? (
           <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
-            No images match the current filter.
+            No images match the current filters.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -464,7 +619,6 @@ function PropertyReviewView({ property, allFeedback, onFeedbackSubmit }) {
         )}
       </div>
 
-      {/* Reference modal */}
       {showReference && <ReferencePanel onClose={() => setShowReference(false)} />}
     </div>
   )
@@ -480,6 +634,7 @@ function App() {
   const [allFeedback, setAllFeedback] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [viewMode, setViewMode] = useState('property') // 'property' | 'ground_truth'
 
   useEffect(() => {
     fetch(`${API_BASE}/feedback`)
@@ -515,35 +670,62 @@ function App() {
     }
   }
 
+  const selectProperty = (prop) => {
+    setSelectedProperty(prop)
+    setViewMode('property')
+  }
+
+  const openMasterGallery = () => {
+    setSelectedProperty(null)
+    setViewMode('ground_truth')
+  }
+
   return (
     <div className="flex h-screen bg-slate-100 text-slate-900">
       {/* Sidebar */}
       <aside className="w-64 shrink-0 border-r border-slate-200 bg-white shadow-sm flex flex-col">
         <div className="p-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-800">Properties</h2>
+          <h2 className="text-lg font-semibold text-slate-800">RealView</h2>
         </div>
-        <nav className="flex-1 overflow-y-auto p-2">
+
+        {/* Master Gallery button */}
+        <div className="px-2 pt-2">
+          <button
+            type="button"
+            onClick={openMasterGallery}
+            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              viewMode === 'ground_truth'
+                ? 'bg-emerald-100 text-emerald-800'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <span className="w-5 h-5 rounded bg-emerald-500 text-white text-xs flex items-center justify-center font-bold">\u2713</span>
+            Master Gallery
+          </button>
+        </div>
+
+        {/* Properties */}
+        <div className="px-4 pt-4 pb-1">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Properties</h3>
+        </div>
+        <nav className="flex-1 overflow-y-auto px-2 pb-2">
           {loading && (
             <p className="px-3 py-2 text-sm text-slate-500">Loading\u2026</p>
           )}
           {error && (
-            <p className="px-3 py-2 text-sm text-red-600" role="alert">
-              {error}
-            </p>
+            <p className="px-3 py-2 text-sm text-red-600" role="alert">{error}</p>
           )}
           {!loading && !error && properties.length === 0 && (
-            <p className="px-3 py-2 text-sm text-slate-500">
-              No properties found
-            </p>
+            <p className="px-3 py-2 text-sm text-slate-500">No properties found</p>
           )}
           {!loading &&
             properties.map((property) => (
               <button
                 key={property.property_id}
                 type="button"
-                onClick={() => setSelectedProperty(property)}
+                onClick={() => selectProperty(property)}
                 className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  selectedProperty?.property_id === property.property_id
+                  viewMode === 'property' && selectedProperty?.property_id === property.property_id
                     ? 'bg-indigo-100 text-indigo-800'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
@@ -556,36 +738,44 @@ function App() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="shrink-0 border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
-          {selectedProperty ? (
-            <div className="flex flex-col gap-1">
-              <h1 className="text-xl font-semibold text-slate-800">
-                {selectedProperty.property_id}
-              </h1>
-              <p className="text-sm text-slate-500">
-                Created: {formatDate(selectedProperty.created_at)}
-              </p>
+        {viewMode === 'ground_truth' ? (
+          <GroundTruthGallery
+            properties={properties}
+            allFeedback={allFeedback}
+            onFeedbackSubmit={(entry) => setAllFeedback((prev) => [...prev, entry])}
+          />
+        ) : (
+          <>
+            <header className="shrink-0 border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
+              {selectedProperty ? (
+                <div className="flex flex-col gap-1">
+                  <h1 className="text-xl font-semibold text-slate-800">
+                    {selectedProperty.property_id}
+                  </h1>
+                  <p className="text-sm text-slate-500">
+                    Created: {formatDate(selectedProperty.created_at)}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <h1 className="text-xl font-semibold text-slate-500">Select a property</h1>
+                  <p className="text-sm text-slate-400">
+                    Choose a property from the sidebar to begin validation
+                  </p>
+                </div>
+              )}
+            </header>
+            <div className="flex-1 overflow-hidden min-h-0">
+              {selectedProperty && (
+                <PropertyReviewView
+                  property={selectedProperty}
+                  allFeedback={allFeedback}
+                  onFeedbackSubmit={(entry) => setAllFeedback((prev) => [...prev, entry])}
+                />
+              )}
             </div>
-          ) : (
-            <div className="flex flex-col gap-1">
-              <h1 className="text-xl font-semibold text-slate-500">
-                Select a property
-              </h1>
-              <p className="text-sm text-slate-400">
-                Choose a property from the sidebar to begin validation
-              </p>
-            </div>
-          )}
-        </header>
-        <div className="flex-1 overflow-hidden min-h-0">
-          {selectedProperty && (
-            <PropertyReviewView
-              property={selectedProperty}
-              allFeedback={allFeedback}
-              onFeedbackSubmit={(entry) => setAllFeedback((prev) => [...prev, entry])}
-            />
-          )}
-        </div>
+          </>
+        )}
       </main>
     </div>
   )

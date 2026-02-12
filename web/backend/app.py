@@ -162,6 +162,30 @@ def _copy_to_ground_truth(property_id: str, filename: str) -> None:
         app.logger.error("Failed to copy to ground truth: %s", exc)
 
 
+@app.route("/api/ground_truth", methods=["GET"])
+def get_ground_truth():
+    """Return a list of filenames present in the out/ground_truth/ folder."""
+    GROUND_TRUTH_DIR.mkdir(parents=True, exist_ok=True)
+    image_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"}
+    files = []
+    for p in sorted(GROUND_TRUTH_DIR.iterdir()):
+        if p.is_file() and p.suffix.lower() in image_extensions:
+            files.append(p.name)
+    return jsonify(files)
+
+
+@app.route("/api/ground_truth/<path:filename>", methods=["GET"])
+def serve_ground_truth_image(filename):
+    """Serve an image from the ground truth folder."""
+    base = Path(filename).name
+    if base != filename:
+        return jsonify({"error": "Invalid filename"}), 400
+    path = GROUND_TRUTH_DIR / base
+    if not path.exists() or not path.is_file():
+        return jsonify({"error": "Image not found"}), 404
+    return send_from_directory(str(GROUND_TRUTH_DIR), base)
+
+
 if __name__ == "__main__":
     # Use 5001 to avoid conflict with macOS AirPlay Receiver on port 5000 (which returns 403 for API requests)
     app.run(debug=True, port=5001)
