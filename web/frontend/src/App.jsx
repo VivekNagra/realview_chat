@@ -410,21 +410,21 @@ function BenchmarkingReport({ allFeedback, onReset }) {
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
           <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide">Verified Leads</p>
           <p className="text-3xl font-bold text-emerald-800 mt-1">{stats.correct}</p>
-          <p className="text-xs text-emerald-600/70 mt-1">{stats.total} total classified</p>
+          <p className="text-xs text-emerald-600/70 mt-1">{stats.total} I alt</p>
         </div>
 
         {/* False Positives */}
         <div className="rounded-xl border border-red-200 bg-red-50 p-4">
           <p className="text-xs font-medium text-red-600 uppercase tracking-wide">False Positives</p>
           <p className="text-3xl font-bold text-red-800 mt-1">{stats.fp}</p>
-          <p className="text-xs text-red-600/70 mt-1">AI said target, wasn{"'"}t</p>
+          <p className="text-xs text-red-600/70 mt-1">AI siger det er et køkken eller bad når det ikke er</p>
         </div>
 
         {/* False Negatives */}
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-xs font-medium text-amber-600 uppercase tracking-wide">False Negatives</p>
           <p className="text-3xl font-bold text-amber-800 mt-1">{stats.fn}</p>
-          <p className="text-xs text-amber-600/70 mt-1">AI missed a lead</p>
+          <p className="text-xs text-amber-600/70 mt-1">AI har overset et køkken eller bad</p>
         </div>
 
         {/* Precision */}
