@@ -162,6 +162,63 @@ def _copy_to_ground_truth(property_id: str, filename: str) -> None:
         app.logger.error("Failed to copy to ground truth: %s", exc)
 
 
+@app.route("/api/stats", methods=["GET"])
+def get_stats():
+    """Compute benchmarking statistics from the latest classification per image."""
+    feedback = []
+    if FEEDBACK_PATH.exists():
+        try:
+            with open(FEEDBACK_PATH, encoding="utf-8") as f:
+                feedback = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            feedback = []
+
+    # Deduplicate: keep only the latest classification per (property_id, filename)
+    latest: dict[tuple[str, str], str] = {}
+    for entry in feedback:
+        cls = entry.get("classification")
+        if cls:
+            latest[(entry["property_id"], entry["filename"])] = cls
+
+    correct = sum(1 for v in latest.values() if v == "correct")
+    fp = sum(1 for v in latest.values() if v == "fp")
+    fn = sum(1 for v in latest.values() if v == "fn")
+
+    precision = (correct / (correct + fp) * 100) if (correct + fp) > 0 else 0
+    recall = (correct / (correct + fn) * 100) if (correct + fn) > 0 else 0
+
+    return jsonify({
+        "correct": correct,
+        "fp": fp,
+        "fn": fn,
+        "total_classified": correct + fp + fn,
+        "precision": round(precision, 1),
+        "recall": round(recall, 1),
+    })
+
+
+@app.route("/api/reset", methods=["DELETE"])
+def reset_benchmarking():
+    """Clear feedback.json and the ground_truth folder. Destructive action."""
+    # Clear feedback
+    try:
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        with open(FEEDBACK_PATH, "w", encoding="utf-8") as f:
+            json.dump([], f)
+    except OSError as e:
+        return jsonify({"error": f"Failed to clear feedback: {e}"}), 500
+
+    # Clear ground truth folder
+    try:
+        if GROUND_TRUTH_DIR.exists():
+            shutil.rmtree(GROUND_TRUTH_DIR)
+        GROUND_TRUTH_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        return jsonify({"error": f"Failed to clear ground truth: {e}"}), 500
+
+    return jsonify({"ok": True})
+
+
 @app.route("/api/ground_truth", methods=["GET"])
 def get_ground_truth():
     """Return a list of filenames present in the out/ground_truth/ folder."""
