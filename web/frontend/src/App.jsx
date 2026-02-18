@@ -537,6 +537,204 @@ function GroundTruthGallery({ properties, allFeedback, onNavigateToProperty, onR
 }
 
 // ---------------------------------------------------------------------------
+// Summary Dashboard
+// ---------------------------------------------------------------------------
+
+function SummaryDashboard() {
+  const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`${API_BASE}/summary`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed'))))
+      .then(setSummary)
+      .catch(() => setSummary(null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full text-slate-400 text-sm">
+        Loading summary…
+      </div>
+    )
+  }
+
+  if (!summary) {
+    return (
+      <div className="flex items-center justify-center h-full text-slate-400 text-sm">
+        No pipeline data available yet. Run the pipeline on some properties first.
+      </div>
+    )
+  }
+
+  const { pipeline_funnel, room_distribution, damage_frequency, actionability_rate, per_proposal_stats } = summary
+  const noiseReduction =
+    pipeline_funnel.total_images > 0
+      ? (((pipeline_funnel.total_images - pipeline_funnel.kitchen_or_bathroom) / pipeline_funnel.total_images) * 100)
+      : 0
+  const maxDamageCount = damage_frequency.length > 0 ? damage_frequency[0].count : 1
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">Summary Dashboard</h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Pipeline metrics across {per_proposal_stats.num_proposals} propert{per_proposal_stats.num_proposals === 1 ? 'y' : 'ies'}
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
+            <span className="w-2 h-2 rounded-full bg-indigo-500" />
+            Pipeline Summary
+          </span>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+        <div className="max-w-5xl mx-auto space-y-6">
+
+          {/* Row 1 — Funnel + Per-Proposal Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Noise Reduction */}
+            <div className="md:col-span-2 rounded-xl border border-indigo-200 bg-indigo-50 p-5">
+              <p className="text-xs font-medium text-indigo-600 uppercase tracking-wide">Noise Reduction</p>
+              <p className="text-sm text-indigo-600/80 mt-1">
+                Pass 1 classifies every listing photo by room type and discards non-kitchen/bathroom images so reviewers only see what matters.
+              </p>
+              <p className="text-3xl font-bold text-indigo-800 mt-2">{noiseReduction.toFixed(1)}%</p>
+              <div className="mt-2 h-2 rounded-full bg-indigo-200 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-indigo-500 transition-all duration-700"
+                  style={{ width: `${Math.min(noiseReduction, 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-indigo-600/70 mt-2">
+                Filtered {pipeline_funnel.total_images - pipeline_funnel.kitchen_or_bathroom} of {pipeline_funnel.total_images} images as irrelevant — kept {pipeline_funnel.kitchen_or_bathroom} kitchen/bathroom images
+              </p>
+            </div>
+
+            {/* Per-Proposal Average */}
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Per Property</p>
+              <p className="text-sm text-slate-400 mt-1">
+                How many property photos the pipeline processes on average for each proposal.
+              </p>
+              <p className="text-3xl font-bold text-slate-800 mt-2">{per_proposal_stats.avg_images_per_proposal}</p>
+              <p className="text-xs text-slate-400 mt-1">avg images / property</p>
+              <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-center">
+                <div>
+                  <p className="text-lg font-semibold text-slate-700">{per_proposal_stats.num_proposals}</p>
+                  <p className="text-xs text-slate-400">properties</p>
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-slate-700">{per_proposal_stats.total_images}</p>
+                  <p className="text-xs text-slate-400">total images</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2 — Room Stats + Actionability */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Kitchen */}
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">Kitchens</p>
+              <p className="text-sm text-blue-600/80 mt-1">
+                Images the model identified as kitchen photos — typically the highest-value inspection target.
+              </p>
+              <p className="text-3xl font-bold text-blue-800 mt-2">{room_distribution.kitchen}</p>
+              <p className="text-xs text-blue-600/70 mt-1">
+                {pipeline_funnel.kitchen_or_bathroom > 0
+                  ? ((room_distribution.kitchen / pipeline_funnel.kitchen_or_bathroom) * 100).toFixed(0)
+                  : 0}% of target rooms
+              </p>
+            </div>
+
+            {/* Bathroom */}
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">Bathrooms</p>
+              <p className="text-sm text-blue-600/80 mt-1">
+                Images classified as bathrooms — checked for water damage, mold, and fixture issues.
+              </p>
+              <p className="text-3xl font-bold text-blue-800 mt-2">{room_distribution.bathroom}</p>
+              <p className="text-xs text-blue-600/70 mt-1">
+                {pipeline_funnel.kitchen_or_bathroom > 0
+                  ? ((room_distribution.bathroom / pipeline_funnel.kitchen_or_bathroom) * 100).toFixed(0)
+                  : 0}% of target rooms
+              </p>
+            </div>
+
+            {/* Actionability */}
+            {(() => {
+              const aColor = rateColor(actionability_rate.rate_percent)
+              return (
+                <div className={`rounded-xl border p-5 ${aColor.card}`}>
+                  <p className={`text-xs font-medium uppercase tracking-wide ${aColor.text}`}>Actionability Rate</p>
+                  <p className={`text-sm mt-1 opacity-80 ${aColor.text}`}>
+                    Percentage of kitchen/bathroom images flagged as worth inspecting.
+                  </p>
+                  <p className={`text-3xl font-bold mt-2 ${aColor.text}`}>{actionability_rate.rate_percent}%</p>
+                  <div className="mt-2 h-2 rounded-full bg-black/10 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${aColor.bg} transition-all duration-700`}
+                      style={{ width: `${Math.min(actionability_rate.rate_percent, 100)}%` }}
+                    />
+                  </div>
+                  <p className={`text-xs mt-1 opacity-70 ${aColor.text}`}>
+                    {actionability_rate.actionable_kb_images} of {actionability_rate.total_kb_images} kitchen/bathroom images
+                  </p>
+                  <div className="flex items-center gap-3 mt-3 pt-3 border-t border-black/5 text-xs opacity-70">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />&#8805;80% good</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />50–79% fair</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />&lt;50% low</span>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* Row 3 — Damage Leaderboard */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Damage Leaderboard</p>
+            <p className="text-sm text-slate-400 mt-1 mb-4">
+              The most common deficiencies found by Pass 2 across all inspected images, ranked by frequency.
+            </p>
+            {damage_frequency.length === 0 ? (
+              <p className="text-sm text-slate-400 italic">No damages detected across properties.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {damage_frequency.map((d) => {
+                  const pct = (d.count / maxDamageCount) * 100
+                  return (
+                    <div key={d.feature_id} className="flex items-center gap-3">
+                      <span className="w-32 shrink-0 text-sm font-medium text-slate-700 capitalize truncate">
+                        {d.feature_id.replace(/_/g, ' ')}
+                      </span>
+                      <div className="flex-1 h-6 rounded-md bg-slate-100 overflow-hidden relative">
+                        <div
+                          className="h-full rounded-md bg-red-400 transition-all duration-700"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="w-10 text-right text-sm font-semibold text-slate-600">{d.count}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // PropertyReviewView
 // ---------------------------------------------------------------------------
 
@@ -774,7 +972,7 @@ function App() {
   const [allFeedback, setAllFeedback] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [viewMode, setViewMode] = useState('property') // 'property' | 'ground_truth'
+  const [viewMode, setViewMode] = useState('property') // 'property' | 'ground_truth' | 'summary'
 
   useEffect(() => {
     fetch(`${API_BASE}/feedback`)
@@ -829,7 +1027,7 @@ function App() {
         </div>
 
         {/* Master Gallery button */}
-        <div className="px-2 pt-2">
+        <div className="px-2 pt-2 space-y-1">
           <button
             type="button"
             onClick={openMasterGallery}
@@ -839,8 +1037,18 @@ function App() {
                 : 'text-slate-600 hover:bg-slate-50'
             }`}
           >
-            
             GT Gallery
+          </button>
+          <button
+            type="button"
+            onClick={() => { setSelectedProperty(null); setViewMode('summary') }}
+            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              viewMode === 'summary'
+                ? 'bg-indigo-100 text-indigo-800'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Summary Dashboard
           </button>
         </div>
 
@@ -878,7 +1086,9 @@ function App() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0">
-        {viewMode === 'ground_truth' ? (
+        {viewMode === 'summary' ? (
+          <SummaryDashboard />
+        ) : viewMode === 'ground_truth' ? (
           <GroundTruthGallery
             properties={properties}
             allFeedback={allFeedback}

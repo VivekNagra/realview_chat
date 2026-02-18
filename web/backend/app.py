@@ -4,6 +4,7 @@ Serves pipeline results, local images, and accepts feedback.
 """
 import json
 import shutil
+from collections import Counter
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -241,6 +242,81 @@ def serve_ground_truth_image(filename):
     if not path.exists() or not path.is_file():
         return jsonify({"error": "Image not found"}), 404
     return send_from_directory(str(GROUND_TRUTH_DIR), base)
+
+
+@app.route("/api/summary", methods=["GET"])
+def get_summary():
+    """Aggregate data from all results JSON files into a pipeline summary."""
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    total_images = 0
+    kitchen_count = 0
+    bathroom_count = 0
+    kb_actionable = 0  # kitchen/bathroom images where actionable is true
+    kb_total = 0       # all kitchen/bathroom images
+    feature_counter: Counter[str] = Counter()
+    proposal_image_counts: list[int] = []
+
+    for path in sorted(OUT_DIR.glob("results_*.json")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        images = data.get("images", [])
+        proposal_image_counts.append(len(images))
+        total_images += len(images)
+
+        for img in images:
+            p1 = img.get("pass1", {})
+            room = p1.get("room_type", "").lower()
+            actionable = p1.get("actionable", False)
+
+            if room == "kitchen":
+                kitchen_count += 1
+                kb_total += 1
+                if actionable:
+                    kb_actionable += 1
+            elif room == "bathroom":
+                bathroom_count += 1
+                kb_total += 1
+                if actionable:
+                    kb_actionable += 1
+
+            for feature in img.get("pass2", []):
+                fid = feature.get("feature_id")
+                if fid:
+                    feature_counter[fid] += 1
+
+    actionability_rate = (kb_actionable / kb_total * 100) if kb_total > 0 else 0
+    num_proposals = len(proposal_image_counts)
+    avg_images = (total_images / num_proposals) if num_proposals > 0 else 0
+
+    return jsonify({
+        "pipeline_funnel": {
+            "total_images": total_images,
+            "kitchen_or_bathroom": kitchen_count + bathroom_count,
+        },
+        "room_distribution": {
+            "kitchen": kitchen_count,
+            "bathroom": bathroom_count,
+        },
+        "damage_frequency": [
+            {"feature_id": fid, "count": cnt}
+            for fid, cnt in feature_counter.most_common()
+        ],
+        "actionability_rate": {
+            "actionable_kb_images": kb_actionable,
+            "total_kb_images": kb_total,
+            "rate_percent": round(actionability_rate, 1),
+        },
+        "per_proposal_stats": {
+            "num_proposals": num_proposals,
+            "total_images": total_images,
+            "avg_images_per_proposal": round(avg_images, 1),
+        },
+    })
 
 
 if __name__ == "__main__":
