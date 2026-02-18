@@ -252,10 +252,22 @@ def get_summary():
     total_images = 0
     kitchen_count = 0
     bathroom_count = 0
-    kb_actionable = 0  # kitchen/bathroom images where actionable is true
-    kb_total = 0       # all kitchen/bathroom images
+    kb_actionable = 0
+    kb_total = 0
     feature_counter: Counter[str] = Counter()
     proposal_image_counts: list[int] = []
+
+    severity_counter: Counter[str] = Counter()
+    kitchen_damage: Counter[str] = Counter()
+    bathroom_damage: Counter[str] = Counter()
+
+    p1_confidence_sum = 0.0
+    p1_confidence_n = 0
+    p2_confidence_sum = 0.0
+    p2_confidence_n = 0
+
+    # Per-property high-severity tracking: {property_id: {high, total}}
+    property_damage: dict[str, dict[str, int]] = {}
 
     for path in sorted(OUT_DIR.glob("results_*.json")):
         try:
@@ -264,14 +276,22 @@ def get_summary():
         except (json.JSONDecodeError, OSError):
             continue
 
+        prop_id = data.get("property_id", path.stem)
         images = data.get("images", [])
         proposal_image_counts.append(len(images))
         total_images += len(images)
+        prop_high = 0
+        prop_total_dmg = 0
 
         for img in images:
             p1 = img.get("pass1", {})
             room = p1.get("room_type", "").lower()
             actionable = p1.get("actionable", False)
+
+            p1_conf = p1.get("confidence")
+            if p1_conf is not None:
+                p1_confidence_sum += p1_conf
+                p1_confidence_n += 1
 
             if room == "kitchen":
                 kitchen_count += 1
@@ -286,12 +306,38 @@ def get_summary():
 
             for feature in img.get("pass2", []):
                 fid = feature.get("feature_id")
-                if fid:
-                    feature_counter[fid] += 1
+                if not fid:
+                    continue
+
+                feature_counter[fid] += 1
+                prop_total_dmg += 1
+
+                sev = (feature.get("severity") or "").lower()
+                if sev:
+                    severity_counter[sev] += 1
+                if sev == "high":
+                    prop_high += 1
+
+                if room == "kitchen":
+                    kitchen_damage[fid] += 1
+                elif room == "bathroom":
+                    bathroom_damage[fid] += 1
+
+                p2_conf = feature.get("confidence")
+                if p2_conf is not None:
+                    p2_confidence_sum += p2_conf
+                    p2_confidence_n += 1
+
+        property_damage[prop_id] = {"high": prop_high, "total": prop_total_dmg}
 
     actionability_rate = (kb_actionable / kb_total * 100) if kb_total > 0 else 0
     num_proposals = len(proposal_image_counts)
     avg_images = (total_images / num_proposals) if num_proposals > 0 else 0
+
+    at_risk = sorted(
+        property_damage.items(),
+        key=lambda kv: (-kv[1]["high"], -kv[1]["total"]),
+    )[:5]
 
     return jsonify({
         "pipeline_funnel": {
@@ -305,6 +351,36 @@ def get_summary():
         "damage_frequency": [
             {"feature_id": fid, "count": cnt}
             for fid, cnt in feature_counter.most_common()
+        ],
+        "room_damage_profiles": {
+            "kitchen": [
+                {"feature_id": fid, "count": cnt}
+                for fid, cnt in kitchen_damage.most_common()
+            ],
+            "bathroom": [
+                {"feature_id": fid, "count": cnt}
+                for fid, cnt in bathroom_damage.most_common()
+            ],
+        },
+        "severity_breakdown": {
+            "high": severity_counter.get("high", 0),
+            "medium": severity_counter.get("medium", 0),
+            "low": severity_counter.get("low", 0),
+        },
+        "confidence_metrics": {
+            "pass1_avg": round(p1_confidence_sum / p1_confidence_n, 3) if p1_confidence_n else None,
+            "pass1_count": p1_confidence_n,
+            "pass2_avg": round(p2_confidence_sum / p2_confidence_n, 3) if p2_confidence_n else None,
+            "pass2_count": p2_confidence_n,
+        },
+        "at_risk_properties": [
+            {
+                "property_id": pid,
+                "high_severity_count": counts["high"],
+                "total_damage_count": counts["total"],
+            }
+            for pid, counts in at_risk
+            if counts["high"] > 0
         ],
         "actionability_rate": {
             "actionable_kb_images": kb_actionable,

@@ -540,7 +540,7 @@ function GroundTruthGallery({ properties, allFeedback, onNavigateToProperty, onR
 // Summary Dashboard
 // ---------------------------------------------------------------------------
 
-function SummaryDashboard() {
+function SummaryDashboard({ onNavigateToProperty }) {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -568,12 +568,16 @@ function SummaryDashboard() {
     )
   }
 
-  const { pipeline_funnel, room_distribution, damage_frequency, actionability_rate, per_proposal_stats } = summary
+  const {
+    pipeline_funnel, room_distribution, actionability_rate,
+    per_proposal_stats, severity_breakdown, room_damage_profiles,
+    confidence_metrics, at_risk_properties,
+  } = summary
   const noiseReduction =
     pipeline_funnel.total_images > 0
       ? (((pipeline_funnel.total_images - pipeline_funnel.kitchen_or_bathroom) / pipeline_funnel.total_images) * 100)
       : 0
-  const maxDamageCount = damage_frequency.length > 0 ? damage_frequency[0].count : 1
+  const severityTotal = (severity_breakdown?.high ?? 0) + (severity_breakdown?.medium ?? 0) + (severity_breakdown?.low ?? 0)
 
   return (
     <div className="flex flex-col h-full">
@@ -697,36 +701,181 @@ function SummaryDashboard() {
             })()}
           </div>
 
-          {/* Row 3 — Damage Leaderboard */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Damage Leaderboard</p>
-            <p className="text-sm text-slate-400 mt-1 mb-4">
-              The most common deficiencies found by Pass 2 across all inspected images, ranked by frequency.
-            </p>
-            {damage_frequency.length === 0 ? (
-              <p className="text-sm text-slate-400 italic">No damages detected across properties.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {damage_frequency.map((d) => {
-                  const pct = (d.count / maxDamageCount) * 100
-                  return (
-                    <div key={d.feature_id} className="flex items-center gap-3">
-                      <span className="w-32 shrink-0 text-sm font-medium text-slate-700 capitalize truncate">
-                        {d.feature_id.replace(/_/g, ' ')}
-                      </span>
-                      <div className="flex-1 h-6 rounded-md bg-slate-100 overflow-hidden relative">
-                        <div
-                          className="h-full rounded-md bg-red-400 transition-all duration-700"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="w-10 text-right text-sm font-semibold text-slate-600">{d.count}</span>
-                    </div>
-                  )
-                })}
+          {/* Row 3 — Severity + Confidence */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Severity Distribution */}
+            <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-5">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Severity Distribution</p>
+              <p className="text-sm text-slate-400 mt-1 mb-4">
+                How detected damages break down by severity level across all inspected images.
+              </p>
+              {severityTotal === 0 ? (
+                <p className="text-sm text-slate-400 italic">No damages detected yet.</p>
+              ) : (
+                <>
+                  {/* Stacked bar */}
+                  <div className="flex h-5 rounded-full overflow-hidden">
+                    {severity_breakdown.high > 0 && (
+                      <div className="bg-red-500 transition-all duration-700" style={{ width: `${(severity_breakdown.high / severityTotal) * 100}%` }} />
+                    )}
+                    {severity_breakdown.medium > 0 && (
+                      <div className="bg-amber-400 transition-all duration-700" style={{ width: `${(severity_breakdown.medium / severityTotal) * 100}%` }} />
+                    )}
+                    {severity_breakdown.low > 0 && (
+                      <div className="bg-blue-400 transition-all duration-700" style={{ width: `${(severity_breakdown.low / severityTotal) * 100}%` }} />
+                    )}
+                  </div>
+                  {/* Legend */}
+                  <div className="flex items-center gap-5 mt-3 text-sm">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-sm bg-red-500" />
+                      <span className="font-medium text-slate-700">High</span>
+                      <span className="text-slate-400">{severity_breakdown.high} ({severityTotal > 0 ? ((severity_breakdown.high / severityTotal) * 100).toFixed(0) : 0}%)</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-sm bg-amber-400" />
+                      <span className="font-medium text-slate-700">Medium</span>
+                      <span className="text-slate-400">{severity_breakdown.medium} ({severityTotal > 0 ? ((severity_breakdown.medium / severityTotal) * 100).toFixed(0) : 0}%)</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-sm bg-blue-400" />
+                      <span className="font-medium text-slate-700">Low</span>
+                      <span className="text-slate-400">{severity_breakdown.low} ({severityTotal > 0 ? ((severity_breakdown.low / severityTotal) * 100).toFixed(0) : 0}%)</span>
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Confidence Stats */}
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-5">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Avg. Classification Confidence</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  Pass 1 room-type prediction certainty.
+                </p>
+                <p className="text-3xl font-bold text-slate-800 mt-2">
+                  {confidence_metrics?.pass1_avg != null ? `${(confidence_metrics.pass1_avg * 100).toFixed(1)}%` : '—'}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">across {confidence_metrics?.pass1_count ?? 0} images</p>
               </div>
-            )}
+              <div className="rounded-xl border border-slate-200 bg-white p-5">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Avg. Detection Confidence</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  Pass 2 damage feature certainty.
+                </p>
+                <p className="text-3xl font-bold text-slate-800 mt-2">
+                  {confidence_metrics?.pass2_avg != null ? `${(confidence_metrics.pass2_avg * 100).toFixed(1)}%` : '—'}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">across {confidence_metrics?.pass2_count ?? 0} detections</p>
+              </div>
+            </div>
           </div>
+
+          {/* Row 4 — Dual Damage Leaderboards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Kitchen damages */}
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Top Kitchen Damages</p>
+              <p className="text-sm text-slate-400 mt-1 mb-4">
+                Most frequent deficiencies found specifically in kitchen images.
+              </p>
+              {(room_damage_profiles?.kitchen ?? []).length === 0 ? (
+                <p className="text-sm text-slate-400 italic">No kitchen damages detected.</p>
+              ) : (
+                <div className="space-y-2">
+                  {room_damage_profiles.kitchen.map((d) => {
+                    const max = room_damage_profiles.kitchen[0].count
+                    const pct = (d.count / max) * 100
+                    return (
+                      <div key={d.feature_id} className="flex items-center gap-3">
+                        <span className="w-28 shrink-0 text-sm font-medium text-slate-700 capitalize truncate">
+                          {d.feature_id.replace(/_/g, ' ')}
+                        </span>
+                        <div className="flex-1 h-5 rounded-md bg-slate-100 overflow-hidden">
+                          <div className="h-full rounded-md bg-blue-400 transition-all duration-700" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="w-8 text-right text-sm font-semibold text-slate-600">{d.count}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Bathroom damages */}
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Top Bathroom Damages</p>
+              <p className="text-sm text-slate-400 mt-1 mb-4">
+                Most frequent deficiencies found specifically in bathroom images.
+              </p>
+              {(room_damage_profiles?.bathroom ?? []).length === 0 ? (
+                <p className="text-sm text-slate-400 italic">No bathroom damages detected.</p>
+              ) : (
+                <div className="space-y-2">
+                  {room_damage_profiles.bathroom.map((d) => {
+                    const max = room_damage_profiles.bathroom[0].count
+                    const pct = (d.count / max) * 100
+                    return (
+                      <div key={d.feature_id} className="flex items-center gap-3">
+                        <span className="w-28 shrink-0 text-sm font-medium text-slate-700 capitalize truncate">
+                          {d.feature_id.replace(/_/g, ' ')}
+                        </span>
+                        <div className="flex-1 h-5 rounded-md bg-slate-100 overflow-hidden">
+                          <div className="h-full rounded-md bg-blue-400 transition-all duration-700" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="w-8 text-right text-sm font-semibold text-slate-600">{d.count}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Row 5 — At-Risk Properties */}
+          {(at_risk_properties ?? []).length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Priority Action List</p>
+              <p className="text-sm text-slate-400 mt-1 mb-4">
+                Properties with the most high-severity damages — review these first.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left">
+                      <th className="pb-2 font-medium text-slate-500 pr-4">Property</th>
+                      <th className="pb-2 font-medium text-slate-500 pr-4 text-center">High Severity</th>
+                      <th className="pb-2 font-medium text-slate-500 pr-4 text-center">Total Damages</th>
+                      <th className="pb-2 font-medium text-slate-500 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {at_risk_properties.map((prop) => (
+                      <tr key={prop.property_id} className="border-b border-slate-100 last:border-0">
+                        <td className="py-2.5 pr-4 font-medium text-slate-700">{prop.property_id}</td>
+                        <td className="py-2.5 pr-4 text-center">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
+                            {prop.high_severity_count}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-4 text-center text-slate-600">{prop.total_damage_count}</td>
+                        <td className="py-2.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToProperty?.(prop.property_id)}
+                            className="px-3 py-1 text-xs font-medium rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors"
+                          >
+                            View &rarr;
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
         </div>
       </div>
@@ -1013,6 +1162,11 @@ function App() {
     setViewMode('property')
   }
 
+  const selectPropertyById = (propertyId) => {
+    const match = properties.find((p) => String(p.property_id) === String(propertyId))
+    if (match) selectProperty(match)
+  }
+
   const openMasterGallery = () => {
     setSelectedProperty(null)
     setViewMode('ground_truth')
@@ -1087,7 +1241,7 @@ function App() {
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0">
         {viewMode === 'summary' ? (
-          <SummaryDashboard />
+          <SummaryDashboard onNavigateToProperty={selectPropertyById} />
         ) : viewMode === 'ground_truth' ? (
           <GroundTruthGallery
             properties={properties}
