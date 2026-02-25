@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_ROOMS = {"bathroom", "kitchen"}
+
+
 
 def _chunk_images(items: list[tuple[Path, str]], chunk_size: int) -> Iterable[list[tuple[Path, str]]]:
     for i in range(0, len(items), chunk_size):
@@ -40,6 +43,13 @@ def _process_images(property_id: str, image_paths: list[Path], client: LLMClient
         pass1 = run_pass1(client, data_url) # type: ignore
         pass1_results[path.name] = pass1
 
+        # Filtrér uønskede rooms herinde i løkken)
+        if not pass1.actionable or pass1.room_type not in ALLOWED_ROOMS:
+            logger.info(
+                "Skipping pass2 for %s (room_type=%s)", path.name, pass1.room_type
+            )
+            continue
+
         logger.info("Running pass2 for %s", path.name)
         # run_pass2 internally calls client.pass2()
         pass2 = run_pass2(client, data_url) # type: ignore
@@ -54,6 +64,11 @@ def _process_images(property_id: str, image_paths: list[Path], client: LLMClient
 
     pass25_results: list[Pass25Result] = []
     for room_type, items in room_groups.items():
+        if room_type not in ALLOWED_ROOMS:
+            logger.info(
+                "Skipping pass2.5 for room %s (not allowed)", room_type
+            )
+            continue
         if len(items) < 2:
             logger.info("Skipping pass2.5 for room %s due to insufficient images", room_type)
             continue
@@ -88,10 +103,19 @@ def _process_images(property_id: str, image_paths: list[Path], client: LLMClient
     return {
         "property_id": property_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "images": all_image_entries,
-        "target_images": [img["filename"] for img in target_images],
-        "review_images": [img["filename"] for img in review_images],
-        "rooms": [asdict(result) for result in pass25_results],
+        "images": [
+    {
+        "filename": filename,
+        "pass1": asdict(pass1),
+        "pass2": [
+            asdict(feature)
+            for feature in pass2_results.get(filename, [])
+        ],
+    }
+    for filename, pass1 in pass1_results.items()
+    if pass1.room_type in ALLOWED_ROOMS
+],
+
     }
 
 
