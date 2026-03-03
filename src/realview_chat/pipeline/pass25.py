@@ -21,6 +21,8 @@ class ConsolidatedFeature:
 class Pass25Result:
     room_type: str
     confirmed_features: list[ConsolidatedFeature]
+    room_condition_score: int | None
+    room_modernity_score: int | None
 
 
 def run_pass25(
@@ -38,4 +40,9 @@ def run_pass25(
         )
         for item in result["confirmed_features"]
     ]
-    return Pass25Result(room_type=result["room_type"], confirmed_features=features)
+    return Pass25Result(
+        room_type=result["room_type"],
+        confirmed_features=features,
+        room_condition_score=result.get("room_condition_score"),
+        room_modernity_score=result.get("room_modernity_score"),
+    )

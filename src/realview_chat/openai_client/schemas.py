@@ -110,8 +110,18 @@ def pass25_schema() -> dict:
                         ],
                     },
                 },
+                "room_condition_score": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                },
+                "room_modernity_score": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                },
             },
-            "required": ["room_type", "confirmed_features"],
+            "required": ["room_type", "confirmed_features", "room_condition_score", "room_modernity_score"],
         },
         "strict": True,
     }

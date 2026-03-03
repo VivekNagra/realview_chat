@@ -182,9 +182,90 @@ def _copy_to_ground_truth(property_id: str, filename: str) -> None:
         app.logger.error("Failed to copy to ground truth: %s", exc)
 
 
+def _load_ai_scores() -> dict[tuple[str, str], dict[str, int | None]]:
+    """Build a lookup of AI scores keyed by (property_id, filename).
+
+    Returns {(pid, fname): {"condition": int|None, "modernity": int|None}}.
+    """
+    ai_scores: dict[tuple[str, str], dict[str, int | None]] = {}
+    for path in OUT_DIR.glob("results_*.json"):
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        pid = str(data.get("property_id", ""))
+        for img in data.get("images", []):
+            fname = img.get("filename", "")
+            ai_scores[(pid, fname)] = {
+                "condition": img.get("condition_score"),
+                "modernity": img.get("modernity_score"),
+            }
+    return ai_scores
+
+
+def _compute_calibration(feedback: list[dict], ai_scores: dict) -> dict:
+    """Compare human score feedback to AI scores and return calibration metrics."""
+    # Deduplicate: keep latest human score per (property_id, filename, score_type)
+    latest_human: dict[tuple[str, str, str], int] = {}
+    for entry in feedback:
+        st = entry.get("score_type")
+        val = entry.get("value")
+        if st and val is not None:
+            key = (entry["property_id"], entry["filename"], st)
+            latest_human[key] = int(val)
+
+    diffs: dict[str, list[int]] = {"condition": [], "modernity": []}
+
+    for (pid, fname, score_type), human_val in latest_human.items():
+        ai_vals = ai_scores.get((pid, fname))
+        if not ai_vals:
+            continue
+        ai_val = ai_vals.get(score_type)
+        if ai_val is None:
+            continue
+        diffs[score_type].append(human_val - ai_val)
+
+    result: dict[str, dict] = {}
+    for score_type in ("condition", "modernity"):
+        d = diffs[score_type]
+        n = len(d)
+        if n == 0:
+            result[score_type] = {
+                "pairs": 0,
+                "mae": None,
+                "bias": None,
+                "agreement_rate": None,
+            }
+        else:
+            mae = sum(abs(v) for v in d) / n
+            bias = sum(d) / n
+            agree = sum(1 for v in d if v == 0)
+            result[score_type] = {
+                "pairs": n,
+                "mae": round(mae, 2),
+                "bias": round(bias, 2),
+                "agreement_rate": round(agree / n * 100, 1),
+            }
+
+    all_diffs = diffs["condition"] + diffs["modernity"]
+    n_all = len(all_diffs)
+    if n_all > 0:
+        result["overall"] = {
+            "pairs": n_all,
+            "mae": round(sum(abs(v) for v in all_diffs) / n_all, 2),
+            "bias": round(sum(all_diffs) / n_all, 2),
+            "agreement_rate": round(sum(1 for v in all_diffs if v == 0) / n_all * 100, 1),
+        }
+    else:
+        result["overall"] = {"pairs": 0, "mae": None, "bias": None, "agreement_rate": None}
+
+    return result
+
+
 @app.route("/api/stats", methods=["GET"])
 def get_stats():
-    """Compute benchmarking statistics from the latest classification per image."""
+    """Compute benchmarking statistics and calibration metrics."""
     feedback = []
     if FEEDBACK_PATH.exists():
         try:
@@ -207,6 +288,9 @@ def get_stats():
     precision = (correct / (correct + fp) * 100) if (correct + fp) > 0 else 0
     recall = (correct / (correct + fn) * 100) if (correct + fn) > 0 else 0
 
+    ai_scores = _load_ai_scores()
+    calibration = _compute_calibration(feedback, ai_scores)
+
     return jsonify({
         "correct": correct,
         "fp": fp,
@@ -214,6 +298,7 @@ def get_stats():
         "total_classified": correct + fp + fn,
         "precision": round(precision, 1),
         "recall": round(recall, 1),
+        "calibration": calibration,
     })
 
 
