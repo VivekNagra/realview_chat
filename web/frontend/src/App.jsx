@@ -641,13 +641,22 @@ function GroundTruthGallery({ properties, allFeedback, onNavigateToProperty, onR
 
 function SummaryDashboard({ onNavigateToProperty }) {
   const [summary, setSummary] = useState(null)
+  const [calibration, setCalibration] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`${API_BASE}/summary`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed'))))
-      .then(setSummary)
-      .catch(() => setSummary(null))
+    Promise.all([
+      fetch(`${API_BASE}/summary`)
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed'))))
+        .catch(() => null),
+      fetch(`${API_BASE}/stats`)
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed'))))
+        .catch(() => null),
+    ])
+      .then(([summaryData, statsData]) => {
+        setSummary(summaryData)
+        setCalibration(statsData?.calibration ?? null)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -975,6 +984,84 @@ function SummaryDashboard({ onNavigateToProperty }) {
               </div>
             </div>
           )}
+
+          {/* Row 6 — Score Calibration */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Score Calibration</p>
+            <p className="text-sm text-slate-400 mt-1 mb-4">
+              How closely the AI&rsquo;s condition and modernity scores match human corrections.
+            </p>
+            {(!calibration || (calibration.overall?.pairs ?? 0) === 0) ? (
+              <div className="flex flex-col items-center justify-center h-32 text-slate-400">
+                <p className="text-sm">No human scores submitted yet.</p>
+                <p className="text-xs mt-1">Correct scores on image cards to see calibration metrics here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { key: 'condition', label: 'Condition (Stand)' },
+                  { key: 'modernity', label: 'Modernity (Modernitet)' },
+                  { key: 'overall', label: 'Overall' },
+                ].map(({ key, label }) => {
+                  const cal = calibration[key]
+                  if (!cal || cal.pairs === 0) {
+                    return (
+                      <div key={key} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</p>
+                        <p className="text-sm text-slate-400 mt-3 italic">No data yet</p>
+                      </div>
+                    )
+                  }
+                  const maeColor =
+                    cal.mae <= 0.5
+                      ? { border: 'border-emerald-200', bg: 'bg-emerald-50', text: 'text-emerald-700', bar: 'bg-emerald-500', tag: 'Strong' }
+                      : cal.mae <= 1.0
+                        ? { border: 'border-amber-200', bg: 'bg-amber-50', text: 'text-amber-700', bar: 'bg-amber-500', tag: 'Moderate' }
+                        : { border: 'border-red-200', bg: 'bg-red-50', text: 'text-red-700', bar: 'bg-red-500', tag: 'Weak' }
+                  const biasSign = cal.bias > 0 ? '+' : ''
+                  const biasLabel = cal.bias < 0 ? 'AI too optimistic' : cal.bias > 0 ? 'AI too conservative' : 'No bias'
+                  return (
+                    <div key={key} className={`rounded-xl border p-4 ${maeColor.border} ${maeColor.bg}`}>
+                      <div className="flex items-center justify-between">
+                        <p className={`text-xs font-medium uppercase tracking-wide ${maeColor.text}`}>{label}</p>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${maeColor.bg} ${maeColor.text} border ${maeColor.border}`}>
+                          {maeColor.tag}
+                        </span>
+                      </div>
+
+                      <p className={`text-3xl font-bold mt-2 ${maeColor.text}`}>{cal.mae}</p>
+                      <p className={`text-xs mt-0.5 opacity-70 ${maeColor.text}`}>MAE (avg. points off)</p>
+
+                      <div className="mt-3 pt-3 border-t border-black/5 space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-500 font-medium">Bias</span>
+                          <span className={`font-semibold ${cal.bias < 0 ? 'text-amber-600' : cal.bias > 0 ? 'text-blue-600' : 'text-slate-600'}`}>
+                            {biasSign}{cal.bias}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 -mt-1">{biasLabel}</p>
+
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-500 font-medium">Agreement</span>
+                          <span className="font-semibold text-slate-700">{cal.agreement_rate}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-black/10 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${maeColor.bar} transition-all duration-500`}
+                            style={{ width: `${Math.min(cal.agreement_rate, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <p className={`text-[10px] mt-3 opacity-50 ${maeColor.text}`}>
+                        Based on {cal.pairs} comparison{cal.pairs !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
         </div>
       </div>
