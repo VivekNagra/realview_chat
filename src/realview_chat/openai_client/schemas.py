@@ -65,9 +65,19 @@ def pass2_schema() -> dict:
                             "explanation",
                         ],
                     },
-                }
+                },
+                "condition_score": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                },
+                "modernity_score": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                },
             },
-            "required": ["features"],
+            "required": ["features", "condition_score", "modernity_score"],
         },
         "strict": True,
     }

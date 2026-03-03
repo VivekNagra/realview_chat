@@ -5,6 +5,7 @@ Serves pipeline results, local images, and accepts feedback.
 import json
 import shutil
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -81,16 +82,18 @@ def get_feedback():
 def post_feedback():
     """Accept feedback and append to out/feedback.json.
 
-    Supports two kinds of feedback:
+    Supports three kinds of feedback:
       1. Feature-level verdict: requires property_id, filename, feature_id, verdict
       2. Image-level classification: requires property_id, filename, classification
          where classification is one of: correct, fp, fn
+      3. Score feedback: requires property_id, filename, score_type, value
+         score_type is one of: condition, modernity
+         value is an integer 1–5
     """
     body = request.get_json(silent=True)
     if not body:
         return jsonify({"error": "JSON body required"}), 400
 
-    # Always required
     for field in ("property_id", "filename"):
         if field not in body:
             return jsonify({"error": f"Missing required field: {field}"}), 400
@@ -102,9 +105,10 @@ def post_feedback():
 
     has_verdict = "feature_id" in body and "verdict" in body
     has_classification = "classification" in body
+    has_score = "score_type" in body and "value" in body
 
-    if not has_verdict and not has_classification:
-        return jsonify({"error": "Must provide (feature_id + verdict) or classification"}), 400
+    if not has_verdict and not has_classification and not has_score:
+        return jsonify({"error": "Must provide (feature_id + verdict), classification, or (score_type + value)"}), 400
 
     if has_verdict:
         entry["feature_id"] = body["feature_id"]
@@ -115,6 +119,21 @@ def post_feedback():
         if body["classification"] not in valid_classifications:
             return jsonify({"error": f"classification must be one of: {', '.join(valid_classifications)}"}), 400
         entry["classification"] = body["classification"]
+
+    if has_score:
+        valid_score_types = ("condition", "modernity")
+        score_type = body["score_type"]
+        if score_type not in valid_score_types:
+            return jsonify({"error": f"score_type must be one of: {', '.join(valid_score_types)}"}), 400
+        try:
+            value = int(body["value"])
+        except (TypeError, ValueError):
+            return jsonify({"error": "value must be an integer"}), 400
+        if value < 1 or value > 5:
+            return jsonify({"error": "value must be between 1 and 5"}), 400
+        entry["score_type"] = score_type
+        entry["value"] = value
+        entry["timestamp"] = datetime.now(timezone.utc).isoformat()
     # Load existing feedback, append, write
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if FEEDBACK_PATH.exists():

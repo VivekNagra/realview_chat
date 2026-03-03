@@ -79,6 +79,39 @@ function getVerdictForFeature(allFeedback, propertyId, filename, featureId) {
   return null
 }
 
+const CONDITION_LABELS = {
+  1: 'Renoveringskrævende',
+  2: 'Slidt',
+  3: 'Velholdt ældre',
+  4: 'Moderniseret',
+  5: 'Nyt / Næsten nyt',
+}
+
+const MODERNITY_LABELS = {
+  1: 'Markant forældet',
+  2: 'Forældet',
+  3: 'Neutral',
+  4: 'Delvist moderne',
+  5: 'Nyt / nutidigt',
+}
+
+/** Return the latest human-submitted score for a given score_type (condition | modernity). */
+function getScoreForImage(allFeedback, propertyId, filename, scoreType) {
+  if (!Array.isArray(allFeedback)) return null
+  for (let i = allFeedback.length - 1; i >= 0; i--) {
+    const e = allFeedback[i]
+    if (
+      e.property_id === propertyId &&
+      e.filename === filename &&
+      e.score_type === scoreType &&
+      e.value != null
+    ) {
+      return e.value
+    }
+  }
+  return null
+}
+
 /** Compute benchmarking stats from feedback (client-side, deduped to latest per image). */
 function computeStats(allFeedback) {
   const latest = new Map()
@@ -143,11 +176,48 @@ function FeatureBadge({ feature }) {
   )
 }
 
+/** Dropdown for condition/modernity scoring with visual correction indicator. */
+function ScoreDropdown({ label, labels, pipelineScore, humanScore, onChange, readOnly }) {
+  const effective = humanScore ?? pipelineScore ?? null
+  const corrected = humanScore != null && humanScore !== pipelineScore
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-slate-500">{label}</span>
+      <select
+        disabled={readOnly}
+        value={effective ?? ''}
+        onChange={(e) => {
+          const val = Number(e.target.value)
+          if (val >= 1 && val <= 5) onChange(val)
+        }}
+        className={`w-full text-xs rounded-lg px-2 py-1.5 border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+          corrected
+            ? 'border-amber-400 bg-amber-50 text-amber-800 focus:ring-amber-300'
+            : 'border-slate-200 bg-white text-slate-700 focus:ring-indigo-300'
+        } ${readOnly ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        {effective == null && <option value="">—</option>}
+        {[1, 2, 3, 4, 5].map((v) => (
+          <option key={v} value={v}>
+            {v} – {labels[v]}
+          </option>
+        ))}
+      </select>
+      {corrected && (
+        <span className="text-[10px] text-amber-600 font-medium">
+          Corrected (AI: {pipelineScore ?? '—'})
+        </span>
+      )}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // ImageCard
 // ---------------------------------------------------------------------------
 
-function ImageCard({ property, image, classification, allFeedback, onClassify, onFeatureFeedback, readOnly = false }) {
+function ImageCard({ property, image, classification, allFeedback, onClassify, onFeatureFeedback, onScoreFeedback, readOnly = false }) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [lightbox, setLightbox] = useState(false)
   const pass1 = image.pass1 ?? {}
@@ -301,6 +371,34 @@ function ImageCard({ property, image, classification, allFeedback, onClassify, o
         ) : (
           <p className="text-xs text-slate-400 italic">No features detected</p>
         )}
+
+        {/* Condition & Modernity score dropdowns — shown for kitchen/bathroom */}
+        {TARGET_ROOM_TYPES.includes(pass1.room_type) && (() => {
+          const pipelineCondition = image.condition_score ?? null
+          const pipelineModernity = image.modernity_score ?? null
+          const humanCondition = getScoreForImage(allFeedback, property.property_id, image.filename, 'condition')
+          const humanModernity = getScoreForImage(allFeedback, property.property_id, image.filename, 'modernity')
+          return (
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+              <ScoreDropdown
+                label="Condition (Stand)"
+                labels={CONDITION_LABELS}
+                pipelineScore={pipelineCondition}
+                humanScore={humanCondition}
+                readOnly={readOnly}
+                onChange={(val) => onScoreFeedback?.(image.filename, 'condition', val)}
+              />
+              <ScoreDropdown
+                label="Modernity (Modernitet)"
+                labels={MODERNITY_LABELS}
+                pipelineScore={pipelineModernity}
+                humanScore={humanModernity}
+                readOnly={readOnly}
+                onChange={(val) => onScoreFeedback?.(image.filename, 'modernity', val)}
+              />
+            </div>
+          )
+        })()}
 
         {/* Classification buttons — hidden in readOnly mode */}
         {!readOnly && (
@@ -526,6 +624,7 @@ function GroundTruthGallery({ properties, allFeedback, onNavigateToProperty, onR
                   allFeedback={allFeedback}
                   onClassify={() => {}}
                   onFeatureFeedback={() => {}}
+                  onScoreFeedback={() => {}}
                 />
               </div>
             ))}
@@ -966,6 +1065,17 @@ function PropertyReviewView({ property, allFeedback, onFeedbackSubmit }) {
       .catch(() => {})
   }, [property.property_id, onFeedbackSubmit])
 
+  const handleScoreFeedback = useCallback((filename, scoreType, value) => {
+    const entry = { property_id: property.property_id, filename, score_type: scoreType, value }
+    fetch(`${API_BASE}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    })
+      .then((res) => { if (res.ok) onFeedbackSubmit(entry) })
+      .catch(() => {})
+  }, [property.property_id, onFeedbackSubmit])
+
   return (
     <div className="flex flex-col h-full">
       {/* Classification tabs row */}
@@ -1100,6 +1210,7 @@ function PropertyReviewView({ property, allFeedback, onFeedbackSubmit }) {
                 allFeedback={allFeedback}
                 onClassify={handleClassify}
                 onFeatureFeedback={handleFeatureFeedback}
+                onScoreFeedback={handleScoreFeedback}
               />
             ))}
           </div>

@@ -10,7 +10,7 @@ from typing import Iterable, TYPE_CHECKING
 
 from realview_chat.io.image_loader import list_image_files, load_images_as_data_urls
 from realview_chat.pipeline.pass1 import Pass1Result, run_pass1
-from realview_chat.pipeline.pass2 import FeatureResult, run_pass2
+from realview_chat.pipeline.pass2 import Pass2Result, run_pass2
 from realview_chat.pipeline.pass25 import Pass25Result, run_pass25
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ def _process_images(property_id: str, image_paths: list[Path], client: LLMClient
     images_with_urls = load_images_as_data_urls(image_paths)
 
     pass1_results: dict[str, Pass1Result] = {}
-    pass2_results: dict[str, list[FeatureResult]] = {}
+    pass2_results: dict[str, Pass2Result] = {}
 
     for path, data_url in images_with_urls:
         logger.info("Running pass1 for %s", path.name)
@@ -78,44 +78,26 @@ def _process_images(property_id: str, image_paths: list[Path], client: LLMClient
             # run_pass25 internally calls client.pass25()
             pass25_results.append(run_pass25(client, room_type, image_data_urls)) # type: ignore
 
-    all_image_entries = [
-        {
+    images = []
+    for filename, pass1 in pass1_results.items():
+        if pass1.room_type not in ALLOWED_ROOMS:
+            continue
+        p2 = pass2_results.get(filename)
+        entry: dict = {
             "filename": filename,
-            "pass1": asdict(pass1_results[filename]),
-            "pass2": [asdict(feature) for feature in pass2_results[filename]],
+            "pass1": asdict(pass1),
+            "pass2": [asdict(f) for f in p2.features] if p2 else [],
         }
-        for filename in pass1_results
-    ]
-
-    # Split images into target (actionable kitchens/bathrooms) and review (everything else)
-    target_rooms = {"kitchen", "bathroom"}
-    target_images = [
-        img for img in all_image_entries
-        if img["pass1"].get("room_type") in target_rooms
-        and img["pass1"].get("actionable") is True
-    ]
-    target_filenames = {img["filename"] for img in target_images}
-    review_images = [
-        img for img in all_image_entries
-        if img["filename"] not in target_filenames
-    ]
+        if p2 and p2.condition_score is not None:
+            entry["condition_score"] = p2.condition_score
+        if p2 and p2.modernity_score is not None:
+            entry["modernity_score"] = p2.modernity_score
+        images.append(entry)
 
     return {
         "property_id": property_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "images": [
-    {
-        "filename": filename,
-        "pass1": asdict(pass1),
-        "pass2": [
-            asdict(feature)
-            for feature in pass2_results.get(filename, [])
-        ],
-    }
-    for filename, pass1 in pass1_results.items()
-    if pass1.room_type in ALLOWED_ROOMS
-],
-
+        "images": images,
     }
 
 

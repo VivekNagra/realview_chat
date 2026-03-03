@@ -17,9 +17,16 @@ class FeatureResult:
     explanation: str
 
 
-def run_pass2(client: LLMClient, image_data_url: str) -> list[FeatureResult]:
+@dataclass(frozen=True)
+class Pass2Result:
+    features: list[FeatureResult]
+    condition_score: int | None
+    modernity_score: int | None
+
+
+def run_pass2(client: LLMClient, image_data_url: str) -> Pass2Result:
     result = client.pass2(image_data_url)
-    return [
+    features = [
         FeatureResult(
             feature_id=item["feature_id"],
             severity=item["severity"],
@@ -28,3 +35,8 @@ def run_pass2(client: LLMClient, image_data_url: str) -> list[FeatureResult]:
         )
         for item in result["features"]
     ]
+    return Pass2Result(
+        features=features,
+        condition_score=result.get("condition_score"),
+        modernity_score=result.get("modernity_score"),
+    )
