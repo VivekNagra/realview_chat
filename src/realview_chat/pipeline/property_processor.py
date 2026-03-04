@@ -98,6 +98,7 @@ def _process_images(property_id: str, image_paths: list[Path], client: LLMClient
         "property_id": property_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "images": images,
+        "rooms": [asdict(r) for r in pass25_results],
     }
 
 
