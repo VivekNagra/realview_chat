@@ -113,6 +113,17 @@ const GRADE_META = {
   E: { label: 'Renoveringskrævende', bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-300', ring: 'ring-red-200' },
 }
 
+const GRADE_THRESHOLDS = [
+  [17, 'A'], [13, 'B'], [9, 'C'], [5, 'D'], [0, 'E'],
+]
+
+function totalToGrade(total) {
+  for (const [threshold, letter] of GRADE_THRESHOLDS) {
+    if (total >= threshold) return letter
+  }
+  return 'E'
+}
+
 function getScoreForImage(allFeedback, propertyId, filename, scoreType) {
   if (!Array.isArray(allFeedback)) return null
   for (let i = allFeedback.length - 1; i >= 0; i--) {
@@ -1115,6 +1126,18 @@ function PropertyReviewView({ property, allFeedback, onFeedbackSubmit }) {
   const { target, review } = useMemo(() => splitImages(property), [property])
   const allImages = useMemo(() => [...target, ...review], [target, review])
 
+  const roomGrades = useMemo(() => {
+    return (property.rooms ?? []).map((room) => {
+      const c = room.room_condition_score
+      const m = room.room_modernity_score
+      const mat = room.room_material_score
+      const f = room.room_functionality_score
+      if (c == null || m == null || mat == null || f == null) return null
+      const total = c + m + mat + f
+      return { room_type: room.room_type, condition: c, modernity: m, material: mat, functionality: f, total, grade: totalToGrade(total) }
+    }).filter(Boolean)
+  }, [property.rooms])
+
   const baseImages = useMemo(() => {
     if (classTab !== 'all_results') return allImages
     return roomTab === 'target' ? target : review
@@ -1180,6 +1203,35 @@ function PropertyReviewView({ property, allFeedback, onFeedbackSubmit }) {
 
   return (
     <div className="flex flex-col h-full">
+      {roomGrades.length > 0 && (
+        <div className="shrink-0 sticky top-0 z-10 border-b border-slate-200 bg-white px-6 py-3">
+          <div className="flex items-center gap-3 overflow-x-auto">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 shrink-0">Room Grades</span>
+            {roomGrades.map((room, idx) => {
+              const gm = GRADE_META[room.grade] ?? GRADE_META.C
+              return (
+                <div key={`${room.room_type}-${idx}`} className={`flex items-center gap-3 rounded-xl border-2 px-4 py-2.5 ${gm.border} ${gm.bg}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-2xl font-black leading-none ${gm.text}`}>{room.grade}</span>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-700 capitalize">{room.room_type}</p>
+                      <p className={`text-[10px] font-medium ${gm.text}`}>{gm.label}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pl-2 border-l border-black/10 text-[10px] text-slate-500">
+                    <span>C:{room.condition}</span>
+                    <span>M:{room.modernity}</span>
+                    <span>Ma:{room.material}</span>
+                    <span>F:{room.functionality}</span>
+                    <span className={`font-bold ${gm.text}`}>{room.total}/20</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-2">
         <div className="flex items-center gap-1">
           {CLASSIFICATION_TABS.map((tab) => {
